@@ -1,1307 +1,1579 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Camera, Mic, Video, Play, Square, RotateCcw, Upload, 
-  Plus, Trash2, CheckCircle, AlertCircle, Sparkles, 
-  Clock, Award, ChevronRight, ChevronLeft, FileText, 
-  Volume2, ShieldAlert, BookOpen, UserCheck, Settings, Loader2, Key, Github, Eye, EyeOff, Check
-} from 'lucide-react';
-
-// 우신고등학교 교표 (업로드해주신 宇信 심볼 SVG 구현)
-const WooshinLogo = ({ className = "w-10 h-10" }) => (
-  <svg viewBox="0 0 120 110" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* 상단 한자 宇 (집 우) */}
-    <path d="M55 4H65V11H90C93 11 95 13 95 16V26C95 29 93 31 90 31H80V23H40V31H30C27 31 25 29 25 26V16C25 13 27 11 30 11H55V4Z" fill="#4A8B5B" />
-    <rect x="38" y="23" width="44" height="7" rx="3.5" fill="#4A8B5B" />
-    <rect x="28" y="34" width="64" height="7.5" rx="3.75" fill="#4A8B5B" />
-    <path d="M56 26H65V47C65 51 62 53 57 53H28C25.5 53 24 51.5 24 49.5C24 47.5 25.5 46 28 46H56V26Z" fill="#4A8B5B" />
-    
-    {/* 중단 한자 信 (믿을 신) */}
-    {/* 좌측 인변(亻) */}
-    <path d="M37 55C39 55 41 56.5 41 59V84C41 86.5 39 88 36.5 88C34 88 32 86.5 32 84V69L29 71C27 72 24.5 71 23.5 69C22.5 67 23.5 64.5 25.5 63L34 56C35 55.3 36 55 37 55Z" fill="#4A8B5B" />
-    {/* 우측 말씀 언(言) */}
-    <rect x="46" y="54" width="42" height="5.5" rx="2.75" fill="#4A8B5B" />
-    <rect x="42" y="62" width="50" height="5.5" rx="2.75" fill="#4A8B5B" />
-    <rect x="46" y="70" width="42" height="5.5" rx="2.75" fill="#4A8B5B" />
-    <rect x="46" y="78" width="42" height="10" rx="3" fill="#4A8B5B" />
-    <rect x="53" y="81.5" width="28" height="3.5" rx="1.5" fill="#ffffff" />
-
-    {/* 하단 지구본 격자 및 초승달 날개 */}
-    <path d="M30 92C40 72 80 72 90 92" stroke="#4A8B5B" strokeWidth="4" fill="#4A8B5B" />
-    {/* 지구본 내부 흰색 격자 무늬 */}
-    <ellipse cx="60" cy="79" rx="11" ry="3" fill="#ffffff" />
-    <path d="M36 86C48 81 72 81 84 86" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M33 93C46 88 74 88 87 93" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M52 79L46 96" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M60 79V97" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M68 79L74 96" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M44 82L36 94" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M76 82L84 94" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-
-    {/* 좌우 감싸는 초승달 형태 받침 */}
-    <path d="M26 60L8 91L19 92C27 104 42 108 59 108V94C42 94 27 84 26 60Z" fill="#4A8B5B" />
-    <path d="M94 60L112 91L101 92C93 104 78 108 61 108V94C78 94 93 84 94 60Z" fill="#4A8B5B" />
-  </svg>
-);
-
-// 기본 샘플 면접 질문 목록 (추후 파일 업로드 시 교체 가능)
-const DEFAULT_QUESTIONS = [
-  { id: 1, category: '인성/자소서', text: '지원한 대학교와 학과를 선택하게 된 동기와, 우신고등학교 재학 시절 이를 위해 준비한 학업 계획을 말씀해 주세요.' },
-  { id: 2, category: '가치관/경험', text: '우신고등학교 재학 중 가장 열정적으로 참여했던 교내 활동은 무엇이며, 그 과정에서 겪은 어려움과 극복 방법을 구체적으로 이야기해 주세요.' },
-  { id: 3, category: '전공적합성', text: '지원한 전공 분야와 관련하여 최근 가장 관심 있게 본 뉴스나 사회적 이슈는 무엇이며, 이에 대한 본인의 견해는 어떠한가요?' },
-  { id: 4, category: '미래비전', text: '대학 입학 후 이루고 싶은 목표와 졸업 후 진로를 통해 사회에 어떻게 기여하고 싶은지 말씀해 주세요.' }
-];
-
-// 사전 등록된 사용자 기본 API 키
-const DEFAULT_USER_API_KEY = "AQ.Ab8RN6JfZEsFEhAvowIZue7_l0dkaJToOqhR6HtHPfY7k0QjRg";
-
-export default function App() {
-  // --- 상태 관리 ---
-  const [questions, setQuestions] = useState(DEFAULT_QUESTIONS);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [newQuestionText, setNewQuestionText] = useState('');
-  const [newQuestionCategory, setNewQuestionCategory] = useState('공통질문');
-  const [activeTab, setActiveTab] = useState('interview'); // 'interview' | 'questions' | 'history' | 'api-guide'
-
-  // GitHub 배포용 API 키 상태 관리 (localStorage 연동 + 기본 키 적용)
-  const [userApiKey, setUserApiKey] = useState(() => {
-    try {
-      return localStorage.getItem('WOOSHIN_GEMINI_API_KEY') || DEFAULT_USER_API_KEY;
-    } catch (e) {
-      return DEFAULT_USER_API_KEY;
-    }
-  });
-  const [showApiModal, setShowApiModal] = useState(false);
-  const [showKeyText, setShowKeyText] = useState(false);
-  const [keySavedToast, setKeySavedToast] = useState(false);
-
-  // 면접 및 타이머 상태
-  const [status, setStatus] = useState('idle'); // 'idle' | 'recording' | 'completed' | 'analyzing'
-  const [timeLeft, setTimeLeft] = useState(180); // 3분 (180초)
-  const [customTimeLimit, setCustomTimeLimit] = useState(180);
-
-  // 미디어 및 녹화 상태
-  const [hasPermission, setHasPermission] = useState(false);
-  const [permissionError, setPermissionError] = useState('');
-  const [recordedVideoUrl, setRecordedVideoUrl] = useState(null);
-  const [recordedAudioBlob, setRecordedAudioBlob] = useState(null);
-  const [transcript, setTranscript] = useState('');
-  const [isSpeechSupported, setIsSpeechSupported] = useState(true);
-
-  // AI 분석 상태
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [analysisError, setAnalysisError] = useState('');
-  const [history, setHistory] = useState([]);
-
-  // Refs
-  const liveVideoRef = useRef(null);
-  const playbackVideoRef = useRef(null);
-  const streamRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioRecorderRef = useRef(null);
-  const videoChunksRef = useRef([]);
-  const audioChunksRef = useRef([]);
-  const recognitionRef = useRef(null);
-  const timerRef = useRef(null);
-
-  // --- 초기화: 카메라/마이크 권한 및 음성 인식(STT) 설정 ---
-  useEffect(() => {
-    initMedia();
-    initSpeechRecognition();
-
-    return () => {
-      stopAllMedia();
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  // 탭 전환 시 라이브 비디오 스트림 재연결
-  useEffect(() => {
-    if (activeTab === 'interview' && status !== 'completed' && liveVideoRef.current && streamRef.current) {
-      liveVideoRef.current.srcObject = streamRef.current;
-    }
-  }, [activeTab, status]);
-
-  const initMedia = async () => {
-    setPermissionError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: { echoCancellation: true, noiseSuppression: true }
-      });
-      streamRef.current = stream;
-      setHasPermission(true);
-      if (liveVideoRef.current) {
-        liveVideoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error('미디어 장치 접근 오류:', err);
-      setHasPermission(false);
-      setPermissionError('카메라 또는 마이크 권한을 확인할 수 없습니다. 브라우저 설정에서 권한을 허용해 주세요.');
-    }
-  };
-
-  const stopAllMedia = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
-    }
-  };
-
-  const initSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSpeechSupported(false);
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ko-KR';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += text + ' ';
-        } else {
-          interimTranscript += text;
-        }
-      }
-      setTranscript((finalTranscript + interimTranscript).trim());
-    };
-
-    recognition.onerror = (event) => {
-      console.warn('음성 인식 알림:', event.error);
-    };
-
-    recognitionRef.current = recognition;
-  };
-
-  // --- 타이머 작동 로직 ---
-  useEffect(() => {
-    if (status === 'recording') {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleStopInterview();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [status]);
-
-  // --- 면접 시작 / 종료 / 리셋 핸들러 ---
-  const handleStartInterview = async () => {
-    if (!hasPermission || !streamRef.current) {
-      await initMedia();
-      if (!streamRef.current) return;
-    }
-
-    // 이전 기록 초기화
-    setRecordedVideoUrl(null);
-    setRecordedAudioBlob(null);
-    setTranscript('');
-    setAnalysisResult(null);
-    setAnalysisError('');
-    setTimeLeft(customTimeLimit);
-    videoChunksRef.current = [];
-    audioChunksRef.current = [];
-
-    try {
-      // 1. 비디오+오디오 통합 녹화 (화면 재생용)
-      const videoRecorder = new MediaRecorder(streamRef.current);
-      videoRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) videoChunksRef.current.push(e.data);
-      };
-      videoRecorder.onstop = () => {
-        const videoBlob = new Blob(videoChunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(videoBlob);
-        setRecordedVideoUrl(url);
-      };
-      mediaRecorderRef.current = videoRecorder;
-      videoRecorder.start(200);
-
-      // 2. 오디오 단독 녹음 (Gemini API 멀티모달 음성 분석 전송용 - 용량 최적화)
-      const audioTracks = streamRef.current.getAudioTracks();
-      if (audioTracks.length > 0) {
-        const audioStream = new MediaStream([audioTracks[0]]);
-        const audioRecorder = new MediaRecorder(audioStream);
-        audioRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
-        };
-        audioRecorder.onstop = () => {
-          const mimeType = audioRecorder.mimeType || 'audio/webm';
-          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          setRecordedAudioBlob(audioBlob);
-        };
-        audioRecorderRef.current = audioRecorder;
-        audioRecorder.start(200);
-      }
-
-      // 3. 실시간 음성 텍스트 변환 시작
-      if (recognitionRef.current && isSpeechSupported) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          console.warn('STT 시작 오류:', e);
-        }
-      }
-
-      setStatus('recording');
-    } catch (err) {
-      console.error('녹화 시작 오류:', err);
-      setPermissionError('녹화를 시작할 수 없습니다. 브라우저 미디어 설정을 확인해 주세요.');
-    }
-  };
-
-  const handleStopInterview = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
-      audioRecorderRef.current.stop();
-    }
-    if (recognitionRef.current && isSpeechSupported) {
-      try { recognitionRef.current.stop(); } catch (e) {}
-    }
-    setStatus('completed');
-  };
-
-  const handleResetInterview = () => {
-    setStatus('idle');
-    setTimeLeft(customTimeLimit);
-    setRecordedVideoUrl(null);
-    setRecordedAudioBlob(null);
-    setTranscript('');
-    setAnalysisResult(null);
-    setAnalysisError('');
-    if (liveVideoRef.current && streamRef.current) {
-      liveVideoRef.current.srcObject = streamRef.current;
-    }
-  };
-
-  // --- Blob to Base64 변환 유틸 ---
-  const blobToBase64 = (blob) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result.split(',')[1];
-        resolve(base64String);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  // --- 지수 백오프가 적용된 Gemini API 호출 함수 ---
-  const fetchWithRetry = async (url, options, maxRetries = 4) => {
-    let delay = 1000;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const response = await fetch(url, options);
-        if (response.ok) return await response.json();
-        if (response.status !== 429 && response.status < 500) {
-          const errText = await response.text();
-          throw new Error(`API 오류 (${response.status}): ${errText}`);
-        }
-      } catch (err) {
-        if (i === maxRetries - 1) throw err;
-      }
-      await new Promise((res) => setTimeout(res, delay));
-      delay *= 2;
-    }
-  };
-
-  // API 키 저장 핸들러
-  const handleSaveApiKey = (e) => {
-    e.preventDefault();
-    try {
-      localStorage.setItem('WOOSHIN_GEMINI_API_KEY', userApiKey.trim());
-      setKeySavedToast(true);
-      setTimeout(() => {
-        setKeySavedToast(false);
-        setShowApiModal(false);
-      }, 1000);
-    } catch (err) {
-      console.error('로컬 스토리지 저장 실패:', err);
-    }
-  };
-
-  // --- Gemini API 응답 분석 실행 ---
-  const handleAnalyzeResponse = async () => {
-    setStatus('analyzing');
-    setAnalysisError('');
-
-    const currentQ = questions[currentIdx];
-    const durationUsed = customTimeLimit - timeLeft;
-    
-    // 1순위: 사용자가 설정한 키 또는 사전 입력된 키 / 2순위: Canvas 런타임 자동 주입("")
-    const apiKey = userApiKey.trim() || DEFAULT_USER_API_KEY || ""; 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-    try {
-      const parts = [];
-      let promptText = `당신은 대한민국 대학교 입학사정관이자 우신고등학교 학생들을 지도하는 전문 면접 코치입니다.
-우신고등학교 학생이 다음 대학 면접 질문에 대해 답변을 완료했습니다.
-
-[면접 질문 정보]
-- 카테고리: ${currentQ.category}
-- 질문: "${currentQ.text}"
-- 소요 시간: ${durationUsed}초 (제한 시간 ${customTimeLimit}초)
-- 음성 인식(STT) 또는 입력된 텍스트 기록: "${transcript ? transcript : '(제공된 음성 파일을 직접 듣고 전사 및 분석해 주세요)'}"
-
-학생의 답변(제공된 오디오 데이터 및 텍스트)을 바탕으로 대학 면접 기준에 맞춰 세밀하게 분석하고 다음 JSON 스키마에 맞춰 한국어로 결과를 반환해 주세요. 오디오가 포함되어 있다면 목소리의 떨림, 자신감, 말하기 속도, 발음의 명확성도 함께 평가해 주세요.`;
-
-      parts.push({ text: promptText });
-
-      // 녹음된 오디오 Blob이 있으면 멀티모달 인라인 데이터로 첨부
-      if (recordedAudioBlob && recordedAudioBlob.size > 0) {
-        const base64Audio = await blobToBase64(recordedAudioBlob);
-        const cleanMimeType = (recordedAudioBlob.type || 'audio/webm').split(';')[0];
-        parts.push({
-          inlineData: {
-            mimeType: cleanMimeType,
-            data: base64Audio
-          }
-        });
-      }
-
-      const payload = {
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              transcription: { type: "STRING", description: "학생 답변의 전체 텍스트 요약 또는 전사 내용" },
-              overallScore: { type: "INTEGER", description: "100점 만점 기준 종합 점수" },
-              logicScore: { type: "INTEGER", description: "논리성 및 질문 의도 파악 점수 (100점 만점)" },
-              deliveryScore: { type: "INTEGER", description: "전달력, 발음, 목소리 톤, 시간 배분 점수 (100점 만점)" },
-              suitabilityScore: { type: "INTEGER", description: "전공 적합성 및 자기주도성 점수 (100점 만점)" },
-              voiceAndPacingFeedback: { type: "STRING", description: "말하기 속도, 목소리 톤, 자신감, 시간 활용에 대한 피드백" },
-              strengths: {
-                type: "ARRAY",
-                items: { type: "STRING" },
-                description: "답변에서 돋보인 강점 2~3가지"
-              },
-              improvements: {
-                type: "ARRAY",
-                items: { type: "STRING" },
-                description: "보완해야 할 점 및 개선 조언 2~3가지"
-              },
-              modelAnswer: { type: "STRING", description: "학생의 답변 의도를 살려 입학사정관에게 깊은 인상을 줄 수 있도록 다듬은 모범 답변 예시" },
-              followUpQuestions: {
-                type: "ARRAY",
-                items: { type: "STRING" },
-                description: "이 답변을 들은 면접관이 이어서 물어볼 법한 예리한 압박/추가 꼬리질문 2가지"
-              }
-            },
-            propertyOrdering: [
-              "transcription", "overallScore", "logicScore", "deliveryScore", 
-              "suitabilityScore", "voiceAndPacingFeedback", "strengths", 
-              "improvements", "modelAnswer", "followUpQuestions"
-            ]
-          }
-        }
-      };
-
-      const data = await fetchWithRetry(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!responseText) throw new Error('분석 결과를 생성하지 못했습니다.');
-
-      const parsedResult = JSON.parse(responseText);
-      setAnalysisResult(parsedResult);
-
-      // 히스토리에 저장
-      setHistory((prev) => [
-        {
-          id: Date.now(),
-          date: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-          question: currentQ.text,
-          category: currentQ.category,
-          duration: durationUsed,
-          result: parsedResult
-        },
-        ...prev
-      ]);
-      setStatus('completed');
-    } catch (err) {
-      console.error('AI 분석 오류:', err);
-      setAnalysisError('AI 분석 중 오류가 발생했습니다. 입력된 API 키가 Google AI Studio 표준 키(보통 AIzaSy...로 시작)인지 확인하시거나, 우측 상단 [API 키 연결됨] 버튼에서 키를 점검해 주세요.');
-      setStatus('completed');
-    }
-  };
-
-  // --- 질문 파일 업로드 및 파싱 핸들러 (.txt, .csv, .json) ---
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target.result;
-      let parsedQuestions = [];
-
-      try {
-        if (file.name.endsWith('.json')) {
-          const json = JSON.parse(content);
-          if (Array.isArray(json)) {
-            parsedQuestions = json.map((item, idx) => ({
-              id: Date.now() + idx,
-              category: item.category || '업로드 질문',
-              text: typeof item === 'string' ? item : (item.text || item.question || '')
-            })).filter(q => q.text.trim() !== '');
-          }
-        } else {
-          // TXT 또는 CSV 줄 단위 파싱
-          const lines = content.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-          parsedQuestions = lines.map((line, idx) => {
-            // 앞부분의 번호(예: "1. ", "Q1. ") 제거 또는 카테고리 분리
-            const cleanedLine = line.replace(/^(Q?\d+[\.\)\-\s]+)+/i, '').trim();
-            if (cleanedLine.includes('|')) {
-              const [cat, txt] = cleanedLine.split('|');
-              return { id: Date.now() + idx, category: cat.trim(), text: txt.trim() };
-            }
-            return { id: Date.now() + idx, category: '학교 면접 질문', text: cleanedLine };
-          }).filter(q => q.text.length > 0);
-        }
-
-        if (parsedQuestions.length > 0) {
-          setQuestions(parsedQuestions);
-          setCurrentIdx(0);
-          handleResetInterview();
-          setActiveTab('interview');
-        }
-      } catch (err) {
-        console.error('파일 파싱 오류:', err);
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
-    e.target.value = '';
-  };
-
-  const handleAddQuestion = (e) => {
-    e.preventDefault();
-    if (!newQuestionText.trim()) return;
-    const newQ = {
-      id: Date.now(),
-      category: newQuestionCategory.trim() || '공통질문',
-      text: newQuestionText.trim()
-    };
-    setQuestions([...questions, newQ]);
-    setNewQuestionText('');
-  };
-
-  const handleDeleteQuestion = (id) => {
-    if (questions.length <= 1) return;
-    const filtered = questions.filter(q => q.id !== id);
-    setQuestions(filtered);
-    if (currentIdx >= filtered.length) {
-      setCurrentIdx(Math.max(0, filtered.length - 1));
-    }
-  };
-
-  // --- 포맷팅 유틸 ---
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
-  // --- GitHub Pages 바로 업로드용 단일 index.html 생성 및 다운로드 ---
-  const handleDownloadGithubHtml = () => {
-    const htmlContent = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>우신고등학교 대학면접 AI 시뮬레이터</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts (Pretendard / Inter) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+    .mirror-video {
+      transform: scaleX(-1);
+    }
+    /* 커스텀 스크롤바 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #10b981;
+    }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100">
-  <div id="root"></div>
-  <!-- GitHub Pages에서 별도 빌드 없이 실행하기 위한 안내 -->
-  <script>
-    console.log("우신고등학교 대학면접 AI 시뮬레이터 로드 완료");
-  </script>
-</body>
-</html>`;
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'index.html';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+<body class="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-600 selection:text-white">
 
-  const currentQuestion = questions[currentIdx] || { category: '질문 없음', text: '질문을 추가해 주세요.' };
-  const progressPercent = ((customTimeLimit - timeLeft) / customTimeLimit) * 100;
+  <!-- ==================== 상단 네비게이션 헤더 ==================== -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+      <!-- 좌측: 우신고 마크 & 타이틀 -->
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg shadow-emerald-900/30 border border-emerald-500/30 shrink-0">
+          <!-- 우신고등학교 교표 (宇信) SVG -->
+          <svg viewBox="0 0 120 110" class="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M55 4H65V11H90C93 11 95 13 95 16V26C95 29 93 31 90 31H80V23H40V31H30C27 31 25 29 25 26V16C25 13 27 11 30 11H55V4Z" fill="#4A8B5B" />
+            <rect x="38" y="23" width="44" height="7" rx="3.5" fill="#4A8B5B" />
+            <rect x="28" y="34" width="64" height="7.5" rx="3.75" fill="#4A8B5B" />
+            <path d="M56 26H65V47C65 51 62 53 57 53H28C25.5 53 24 51.5 24 49.5C24 47.5 25.5 46 28 46H56V26Z" fill="#4A8B5B" />
+            <path d="M37 55C39 55 41 56.5 41 59V84C41 86.5 39 88 36.5 88C34 88 32 86.5 32 84V69L29 71C27 72 24.5 71 23.5 69C22.5 67 23.5 64.5 25.5 63L34 56C35 55.3 36 55 37 55Z" fill="#4A8B5B" />
+            <rect x="46" y="54" width="42" height="5.5" rx="2.75" fill="#4A8B5B" />
+            <rect x="42" y="62" width="50" height="5.5" rx="2.75" fill="#4A8B5B" />
+            <rect x="46" y="70" width="42" height="5.5" rx="2.75" fill="#4A8B5B" />
+            <rect x="46" y="78" width="42" height="10" rx="3" fill="#4A8B5B" />
+            <rect x="53" y="81.5" width="28" height="3.5" rx="1.5" fill="#ffffff" />
+            <path d="M30 92C40 72 80 72 90 92" stroke="#4A8B5B" stroke-width="4" fill="#4A8B5B" />
+            <ellipse cx="60" cy="79" rx="11" ry="3" fill="#ffffff" />
+            <path d="M36 86C48 81 72 81 84 86" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M33 93C46 88 74 88 87 93" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M52 79L46 96" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M60 79V97" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M68 79L74 96" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M44 82L36 94" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M76 82L84 94" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M26 60L8 91L19 92C27 104 42 108 59 108V94C42 94 27 84 26 60Z" fill="#4A8B5B" />
+            <path d="M94 60L112 91L101 92C93 104 78 108 61 108V94C78 94 93 84 94 60Z" fill="#4A8B5B" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            <span>우신고등학교 대학면접 AI</span>
+            <span class="hidden xl:inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              맞춤형 생기부 면접
+            </span>
+          </h1>
+        </div>
+      </div>
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-600 selection:text-white">
-      {/* 상단 네비게이션 헤더 (우신고 테마 적용) */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            {/* 우신고등학교 마크 배지 */}
-            <div className="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg shadow-emerald-900/30 border border-emerald-500/30 shrink-0">
-              <WooshinLogo className="w-full h-full" />
+      <!-- 중앙: 학생 이름 빠른 선택 드롭다운 -->
+      <div class="flex items-center gap-2">
+        <div class="relative flex items-center bg-slate-800/90 border border-emerald-500/40 rounded-xl px-3 py-1.5 shadow-inner">
+          <i data-lucide="user-check" class="w-4 h-4 text-emerald-400 mr-2 shrink-0"></i>
+          <span class="text-xs text-slate-400 mr-2 hidden sm:inline">학생 선택:</span>
+          <select id="studentSelectHeader" onchange="handleSelectStudent(this.value)" class="bg-transparent text-xs sm:text-sm font-bold text-white focus:outline-none cursor-pointer pr-2">
+            <!-- JS에서 자동 생성 -->
+          </select>
+        </div>
+      </div>
+
+      <!-- 우측: 탭 메뉴 & API 설정 -->
+      <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
+          <button onclick="switchTab('interview')" id="tabBtn-interview" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 bg-emerald-600 text-white shadow-sm">
+            <i data-lucide="video" class="w-4 h-4"></i>
+            <span class="hidden md:inline">실전 면접</span>
+          </button>
+          <button onclick="switchTab('students')" id="tabBtn-students" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            <span class="hidden md:inline">학생/질문 선택</span>
+          </button>
+          <button onclick="switchTab('history')" id="tabBtn-history" class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <i data-lucide="award" class="w-4 h-4"></i>
+            <span class="hidden md:inline">분석 기록 (<span id="historyCountBadge">0</span>)</span>
+          </button>
+        </div>
+
+        <button onclick="openApiModal()" id="apiKeyBtn" class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60 transition" title="Gemini API 키 설정">
+          <i data-lucide="key" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span class="hidden lg:inline" id="apiKeyStatusText">API 연결됨</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== API 키 설정 모달 ==================== -->
+  <div id="apiModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="key" class="w-5 h-5 text-emerald-400"></i>
+          <span>Gemini API 키 설정</span>
+        </h3>
+        <button onclick="closeApiModal()" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+      <div class="space-y-2 text-xs text-slate-300 leading-relaxed">
+        <p>기본 API 키가 내장되어 있으며, 필요 시 본인의 <strong>Google AI Studio (Gemini) API 키</strong>로 변경할 수 있습니다.</p>
+        <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200">
+          💡 <strong>무료 한도 안전 사용:</strong> Google AI Studio에서 결제 카드를 등록하지 않은 무료(Free Tier) 키를 사용하시면 무료 한도 초과 시 자동으로 멈추며 요금이 절대 청구되지 않습니다.
+        </div>
+      </div>
+      <div class="space-y-3">
+        <input id="apiKeyInput" type="password" placeholder="AIzaSy... 또는 기본 API 키 입력" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" />
+        <div class="flex items-center justify-between pt-2">
+          <button onclick="toggleApiKeyVisibility()" class="text-xs text-slate-400 hover:text-slate-200 underline">키 문자열 보기/숨기기</button>
+          <div class="flex items-center gap-2">
+            <button onclick="resetDefaultApiKey()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">기본값 복원</button>
+            <button onclick="saveApiKey()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">저장하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 메인 컨텐츠 영역 ==================== -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- [1] 실전 면접 탭 -->
+    <section id="tab-interview" class="space-y-6">
+      <!-- 상단 학생 프로필 및 질문 선택 바 -->
+      <div class="bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 sm:p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4 border-b border-slate-800/80 pb-3.5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="currentStudentBadge" class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-500 text-slate-950 shadow">
+              김우현 학생
+            </span>
+            <span id="questionCounterBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              문항 1 / 247
+            </span>
+            <span id="questionCategoryBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+              1학년 자율활동
+            </span>
+          </div>
+
+          <!-- 카테고리 필터 및 문항 이동 컨트롤 -->
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="categoryFilterSelect" onchange="handleCategoryFilterChange(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">전체 영역/과목 보기</option>
+            </select>
+
+            <button onclick="pickRandomQuestion()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-medium flex items-center gap-1 border border-slate-700 transition" title="무작위 질문 뽑기">
+              <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
+              <span>랜덤 출제</span>
+            </button>
+
+            <label class="cursor-pointer px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 border border-slate-700 transition" title="추가 질문 TXT 파일 업로드">
+              <i data-lucide="upload" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span class="hidden sm:inline">추가 파일 업로드</span>
+              <input type="file" accept=".txt,.csv,.json" multiple onchange="handleCustomFileUpload(event)" class="hidden" />
+            </label>
+
+            <div class="flex items-center gap-1">
+              <button onclick="prevQuestion()" id="prevQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <button onclick="nextQuestion()" id="nextQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
             </div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                <span>우신고등학교 대학면접 AI</span>
-                <span className="hidden md:inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  우신고 진로진학부
-                </span>
-              </h1>
+          </div>
+        </div>
+
+        <!-- 질문 텍스트 본문 -->
+        <div class="flex items-start justify-between gap-4">
+          <h2 id="questionTextDisplay" class="text-lg sm:text-2xl font-bold text-white leading-relaxed">
+            Q001. 질문을 불러오는 중입니다...
+          </h2>
+          <button onclick="speakCurrentQuestion()" class="shrink-0 px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-emerald-600/30 border border-slate-700 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition" title="질문 음성으로 듣기">
+            <i data-lucide="volume-2" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">질문 듣기</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 메인 그리드: 좌측(카메라 & STT) / 우측(3분 타이머 & AI 분석) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 좌측 7칸: 카메라 및 음성 인식 -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl relative aspect-video flex items-center justify-center">
+            <!-- 카메라 권한 안내 -->
+            <div id="mediaPermissionPrompt" class="p-8 text-center max-w-md hidden">
+              <i data-lucide="shield-alert" class="w-12 h-12 text-amber-400 mx-auto mb-3"></i>
+              <h3 class="text-base font-semibold text-white mb-2">카메라 및 마이크 연결 필요</h3>
+              <p id="mediaErrorText" class="text-xs sm:text-sm text-slate-400 mb-4">
+                실전 면접 연습을 위해 브라우저의 카메라와 마이크 권한을 허용해 주세요.
+              </p>
+              <button onclick="initMediaStream()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition">
+                카메라 · 마이크 다시 연결하기
+              </button>
+            </div>
+
+            <!-- 실시간 웹캠 비디오 -->
+            <video id="liveVideo" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
+
+            <!-- 녹화 완료 후 재생 비디오 -->
+            <video id="playbackVideo" controls class="w-full h-full object-contain bg-black hidden"></video>
+
+            <!-- 좌측 상단 상태 배지 -->
+            <div id="recordingStatusBadge" class="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md text-slate-200 text-xs font-medium border border-slate-700">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <span>카메라 · 마이크 준비됨</span>
+            </div>
+
+            <!-- 우측 하단 우신고 워터마크 -->
+            <div class="absolute bottom-3 right-3 pointer-events-none flex items-center gap-1.5 bg-slate-950/70 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
+              <span class="text-[11px] font-bold text-emerald-400">宇信</span>
+              <span class="text-[11px] font-semibold text-white/90">우신고등학교</span>
             </div>
           </div>
 
-          {/* 탭 메뉴 및 API 설정 버튼 */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
-              <button
-                onClick={() => setActiveTab('interview')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                  activeTab === 'interview'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Video className="w-4 h-4" />
-                <span className="hidden sm:inline">실전 면접</span>
+          <!-- 실시간 음성 인식(STT) 텍스트 박스 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                <i data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
+                <span>음성 답변 실시간 텍스트 변환 (직접 입력 및 수정 가능)</span>
+              </label>
+              <span id="sttActiveIndicator" class="text-xs text-emerald-400 animate-pulse hidden">● 음성을 인식하고 있습니다...</span>
+            </div>
+            <textarea id="transcriptInput" rows="3" placeholder="질문 시작 버튼을 누르고 마이크에 답변을 말씀하시면 자동으로 기록됩니다. 답변 후 내용을 직접 수정하거나 보완할 수 있습니다." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition resize-none"></textarea>
+          </div>
+        </div>
+
+        <!-- 우측 5칸: 3분 카운트다운 및 AI 분석 리포트 -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+                <i data-lucide="clock" class="w-4 h-4 text-emerald-400"></i>
+                <span>답변 제한 시간 (3분 이내)</span>
+              </span>
+              <div id="timeLimitSelector" class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                <button onclick="setTimeLimit(60)" id="limitBtn-60" class="px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition">1분</button>
+                <button onclick="setTimeLimit(120)" id="limitBtn-120" class="px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition">2분</button>
+                <button onclick="setTimeLimit(180)" id="limitBtn-180" class="px-2 py-0.5 rounded text-xs font-medium bg-emerald-600 text-white transition">3분</button>
+              </div>
+            </div>
+
+            <!-- 대형 타이머 -->
+            <div class="text-center py-5 bg-slate-950 rounded-2xl border border-slate-800/80 mb-4 relative overflow-hidden">
+              <div id="timerDisplay" class="text-5xl sm:text-6xl font-mono font-extrabold tracking-wider text-white transition-colors">
+                03:00
+              </div>
+              <p id="timerSubText" class="text-xs text-slate-400 mt-2">
+                질문 시작 버튼을 누르면 카운트다운과 녹화가 동시에 시작됩니다.
+              </p>
+              <div class="w-full bg-slate-800 h-1.5 mt-4">
+                <div id="timerProgressBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- 제어 버튼 모음 -->
+            <div id="actionButtonsContainer" class="flex flex-col sm:flex-row gap-3">
+              <button id="startInterviewBtn" onclick="startInterview()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-base shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition">
+                <i data-lucide="play" class="w-5 h-5"></i>
+                <span>질문 시작 (녹화 및 타이머 작동)</span>
               </button>
-              <button
-                onClick={() => setActiveTab('questions')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                  activeTab === 'questions'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span className="hidden sm:inline">질문 목록 ({questions.length})</span>
+
+              <button id="stopInterviewBtn" onclick="stopInterview()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-base shadow-lg shadow-red-600/25 hidden items-center justify-center gap-2 transition">
+                <i data-lucide="square" class="w-5 h-5"></i>
+                <span>답변 완료 (녹화 종료)</span>
               </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                  activeTab === 'history'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Award className="w-4 h-4" />
-                <span className="hidden sm:inline">분석 기록 ({history.length})</span>
+
+              <button id="analyzeBtn" onclick="analyzeWithGemini()" class="flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 hidden items-center justify-center gap-2 transition">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span id="analyzeBtnText">AI 면접 분석 리포트 생성</span>
               </button>
-              <button
-                onClick={() => setActiveTab('api-guide')}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
-                  activeTab === 'api-guide'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Github className="w-4 h-4" />
-                <span className="hidden md:inline">GitHub & API 연동</span>
+
+              <button id="resetInterviewBtn" onclick="resetInterview()" class="py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm hidden items-center justify-center gap-1.5 border border-slate-700 transition">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span>다시 도전</span>
               </button>
             </div>
 
-            {/* API 키 설정 모달 열기 버튼 */}
-            <button
-              onClick={() => setShowApiModal(true)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition ${
-                userApiKey
-                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60'
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-              }`}
-              title="Gemini API 키 설정"
-            >
-              <Key className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden lg:inline">{userApiKey ? 'API 키 연결됨' : 'API 키 설정'}</span>
+            <!-- 에러 메시지 표시창 -->
+            <div id="analysisErrorBox" class="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs hidden"></div>
+          </div>
+
+          <!-- AI 분석 리포트 결과 박스 -->
+          <div id="analysisResultContainer" class="bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-xl space-y-5 hidden">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">우신고 AI 입학사정관 평가</span>
+                <h3 class="text-lg font-bold text-white mt-0.5">답변 종합 분석 리포트</h3>
+              </div>
+              <div class="text-right">
+                <div class="text-3xl font-extrabold text-emerald-400">
+                  <span id="resOverallScore">0</span><span class="text-sm font-normal text-slate-400"> / 100점</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-xs text-slate-400 mb-1">논리성/이해도</div>
+                <div id="resLogicScore" class="text-lg font-bold text-emerald-400">0점</div>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-xs text-slate-400 mb-1">전달력/음성</div>
+                <div id="resDeliveryScore" class="text-lg font-bold text-teal-400">0점</div>
+              </div>
+              <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div class="text-xs text-slate-400 mb-1">전공/적합성</div>
+                <div id="resSuitabilityScore" class="text-lg font-bold text-cyan-400">0점</div>
+              </div>
+            </div>
+
+            <div class="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-3.5">
+              <h4 class="text-xs font-bold text-emerald-300 mb-1">🎙️ 음성 전달력 및 시간 배분 코칭</h4>
+              <p id="resVoiceFeedback" class="text-xs text-slate-300 leading-relaxed"></p>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <h4 class="text-xs font-bold text-emerald-400 mb-1.5">👍 좋았던 점 (강점)</h4>
+                <ul id="resStrengthsList" class="space-y-1 text-xs text-slate-300"></ul>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-amber-400 mb-1.5">💡 보완할 점 (개선 포인트)</h4>
+                <ul id="resImprovementsList" class="space-y-1 text-xs text-slate-300"></ul>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <h4 class="text-xs font-bold text-emerald-400 mb-1.5">✨ AI 추천 모범 답변 가이드</h4>
+              <p id="resModelAnswer" class="text-xs text-slate-300 leading-relaxed whitespace-pre-line"></p>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <h4 class="text-xs font-bold text-rose-400 mb-2">🔥 대비해야 할 예상 꼬리질문</h4>
+              <ul id="resFollowUpList" class="space-y-1.5 text-xs text-slate-200"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- [2] 학생 선택 및 전체 질문 목록 탭 -->
+    <section id="tab-students" class="space-y-6 hidden">
+      <!-- 학생 이름 선택 그리드 카드 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+              <i data-lucide="users" class="w-5 h-5 text-emerald-400"></i>
+              <span>우신고등학교 학생 이름 선택</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              자신의 이름을 클릭하면 본인의 생활기록부 맞춤형 면접 질문 목록이 즉시 설정됩니다.
+            </p>
+          </div>
+          <label class="cursor-pointer shrink-0 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition">
+            <i data-lucide="file-plus" class="w-4 h-4"></i>
+            <span>학생 질문 TXT 파일 추가 등록</span>
+            <input type="file" accept=".txt,.csv,.json" multiple onchange="handleCustomFileUpload(event)" class="hidden" />
+          </label>
+        </div>
+
+        <div id="studentButtonsGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-2.5">
+          <!-- JS에서 학생 카드 자동 렌더링 -->
+        </div>
+      </div>
+
+      <!-- 선택된 학생의 질문 검색 및 전체 목록 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 id="studentQuestionListTitle" class="text-base font-bold text-white">학생 질문 목록</h3>
+          <div class="flex items-center gap-2">
+            <input id="questionSearchInput" type="text" oninput="renderStudentQuestionList()" placeholder="질문 키워드 또는 과목 검색..." class="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 w-64" />
+          </div>
+        </div>
+
+        <div id="studentQuestionsListContainer" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+          <!-- JS에서 질문 리스트 렌더링 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- [3] 분석 기록 탭 -->
+    <section id="tab-history" class="max-w-4xl mx-auto space-y-4 hidden">
+      <div id="historyEmptyState" class="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
+        <i data-lucide="award" class="w-12 h-12 text-slate-600 mx-auto mb-3"></i>
+        <h3 class="text-base font-bold text-slate-300 mb-1">아직 저장된 AI 면접 분석 기록이 없습니다</h3>
+        <p class="text-xs text-slate-500 mb-4">실전 면접 탭에서 답변을 마치고 AI 분석 리포트를 생성하면 이곳에 기록됩니다.</p>
+        <button onclick="switchTab('interview')" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition">
+          실전 면접 연습하러 가기
+        </button>
+      </div>
+      <div id="historyListContainer" class="space-y-4"></div>
+    </section>
+
+  </main>
+
+  <!-- ==================== 학생별 질문 원문 데이터베이스 & 스크립트 ==================== -->
+  <script>
+    // 사전 등록된 사용자 기본 API 키
+    const DEFAULT_USER_API_KEY = "AQ.Ab8RN6JfZEsFEhAvowIZue7_l0dkaJToOqhR6HtHPfY7k0QjRg";
+
+    // 업로드해주신 우신고등학교 학생별 맞춤 면접 질문 데이터 (구조화 내장)
+    const RAW_STUDENT_DB = {
+      "김우현": [
+        ["1학년 자율활동 · 무지와 도덕적 책임", "Q001. 무지는 악인가라는 논증문에서 어떤 입장을 냈나요?"],
+        ["1학년 자율활동 · 무지와 도덕적 책임", "Q002. 단순히 모르는 것과 책임을 회피하는 것은 어떻게 다른가요?"],
+        ["1학년 자율활동 · 무지와 도덕적 책임", "Q003. 데이터를 잘못 해석한 사람에게도 같은 기준을 적용할 수 있나요?"],
+        ["1학년 자율활동 · 무지와 도덕적 책임", "Q004. 분석자로서 실천할 원칙을 말해 보세요."],
+        ["2학년 자율활동 · SVM과 초평면", "Q005. 지진 탐구 발표에서 소개한 분류 기법은 무엇인가요?"],
+        ["2학년 자율활동 · SVM과 초평면", "Q006. 초평면은 분류에서 어떤 역할을 하나요?"],
+        ["2학년 자율활동 · SVM과 초평면", "Q007. 학습 자료를 완벽히 나누면 좋은 경계인가요?"],
+        ["2학년 자율활동 · SVM과 초평면", "Q008. 분류 성능을 확인할 자료는 어떻게 마련하겠나요?"],
+        ["2학년 자율활동 · 재활용 등급제 캠페인", "Q009. 재활용 캠페인에서 무엇을 수치화하려 했나요?"],
+        ["2학년 자율활동 · 데이터마인드와 개인정보", "Q013. 가상 기업 데이터마인드는 어떤 업무를 하도록 설정했나요?"],
+        ["3학년 자율활동 · AI 능력과 업무 실적의 가설", "Q017. 볼륨업에서 검토한 가설은 무엇이었나요?"],
+        ["1학년 진로활동 · UX에서 데이터 분석으로", "Q021. 1학년 비전스쿨에서 어떤 일을 꿈꿨나요?"],
+        ["2학년 진로활동 · 아이스크림 판매량 선형회귀", "Q025. 데이터사이언스 캠프에서 어떤 예측을 했나요?"],
+        ["2학년 진로활동 · 식물과 대화하는 인터페이스", "Q029. 식물 상태를 어떻게 사람이 알아차리게 했나요?"],
+        ["3학년 진로활동 · 사피엔스와 정보 편향", "Q033. 사피엔스 독서를 어떤 데이터 개념과 연결했나요?"],
+        ["3학년 진로활동 · 커뮤니티 매핑 군집화", "Q037. 지도에서 해결하려 한 문제는 무엇이었나요?"],
+        ["3학년 진로활동 · GPS 오차와 이상치 정제", "Q041. 지도 자료 저장 전에 무엇을 걸러내자고 했나요?"],
+        ["1학년 동아리활동 · 이미테이션 게임과 수학의 가치", "Q045. 영화 감상 후 수학에 대한 생각이 어떻게 달라졌나요?"],
+        ["2학년 동아리활동 · 스마트시티 교통 신호", "Q049. 교통 신호 탐구에서 어떤 입력과 출력을 설명했나요?"],
+        ["2학년 동아리활동 · 식물의 이산화탄소 공급 제어", "Q053. 식물 제어 탐구에서 무엇을 자동으로 조절하려 했나요?"],
+        ["3학년 동아리활동 · 식단 텍스트와 가상수", "Q057. 식단 프로젝트에서 텍스트를 어떻게 수치로 바꿨나요?"],
+        ["3학년 동아리활동 · 더블 디센트의 오차 변화", "Q061. 더블 디센트 발표에서 어떤 오차 모양을 설명했나요?"],
+        ["3학년 동아리활동 · 지진파 시뮬레이터", "Q065. 직접 설계한 시뮬레이터에서 어떤 자료를 만들었나요?"],
+        ["2학년 수학Ⅱ · 경사하강법과 미분", "Q123. 수학Ⅱ에서 경사하강법과 무엇을 연결했나요?"],
+        ["2학년 수학Ⅱ · 경사하강법과 미분", "Q124. 기울기 반대 방향으로 이동하는 이유는 무엇인가요?"],
+        ["2학년 지구과학Ⅰ · 지진 전조와 태양 활동", "Q147. 전리층 탐구에서 제시한 탐지 아이디어는 무엇인가요?"],
+        ["2학년 과학과제 연구 · 태양광 학습 데이터 규모", "Q155. 과학과제 연구에서 어떤 자료로 예측했나요?"],
+        ["3학년 화법과 작문 · 디지털 발자국", "Q173. 디지털 발자국 강연에서 어떤 자료의 가치를 설명했나요?"],
+        ["3학년 확률과 통계 · 파촐리의 분배 문제", "Q181. 중단된 경기의 상금을 왜 현재 점수대로 나누지 않았나요?"],
+        ["3학년 확률과 통계 · 통계 그래프의 왜곡", "Q185. 통계 오류 발표에서 어떤 문제를 살폈나요?"],
+        ["3학년 한국지리 · 범죄 위험 지도와 낙인", "Q193. 한국지리에서 범죄 예측 지도의 어떤 이점을 설명했나요?"],
+        ["3학년 인공지능 기초 · 범죄 데이터 군집과 전처리", "Q219. 범죄 군집 분석에서 어떤 자료를 묶었나요?"],
+        ["최종 핵심 점검 | 데이터사이언스학과", "Q225. 데이터사이언스학과에 지원한 동기는 무엇인가요?"],
+        ["최종 핵심 점검 | 데이터사이언스학과", "Q226. 태양광 예측에서 입력·목표 변수와 자료 분할은 어떻게 했나요?"],
+        ["최종 핵심 점검 | AI응용학과", "Q230. AI응용학과에서 만들고 싶은 서비스와 지원동기는 무엇인가요?"],
+        ["최종 핵심 점검 | 인공지능학과", "Q235. 인공지능학과 지원동기와 깊이 배우고 싶은 원리는 무엇인가요?"],
+        ["최종 핵심 점검 | 인공지능학과", "Q236. SVM의 초평면·마진·커널을 예시로 설명해 보세요."],
+        ["최종 핵심 점검 | 자유전공학부", "Q240. 자유전공학부 지원동기는 무엇인가요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q245. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q246. 생기부 표현과 본인의 실제 경험이 다르거나 부정확한 부분은 어떻게 설명하겠어요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q247. 대학에서 가장 먼저 보완할 기초와 새롭게 탐구할 질문은 무엇인가요?"]
+      ],
+      "김하랑": [
+        ["1학년 자율활동 · 운동장 환경 개선", "Q001. 운동장 쓰레기 문제에서 직접 바꾼 것은 무엇인가요?"],
+        ["2학년 자율활동 · 미세먼지 흡착과 재사용", "Q005. 환경지킴이단에서 어떤 흡착 재료들을 비교했나요?"],
+        ["3학년 자율활동 · 학생회 선발과 인계", "Q009. 학생회 선발에서 어떤 역할을 했나요?"],
+        ["3학년 자율활동 · 철 이온 용출과 전기분해", "Q013. 해양 철 비료 팟캐스트에서 어떤 원리를 정리했나요?"],
+        ["1학년 진로활동 · 시트르산 추출의 실패 해석", "Q017. 온도별 추출에서 세운 가설과 결과는 무엇이었나요?"],
+        ["2학년 진로활동 · 자동 급수와 사용자 피드백", "Q021. 임베디드 활동에서 무엇을 설계했나요?"],
+        ["2학년 진로활동 · 씨빈과 PETase 결합", "Q025. 씨빈과 효소를 결합하려 한 이유는 무엇인가요?"],
+        ["3학년 진로활동 · 초음파 조류 방제", "Q029. 초음파 방제 아이디어에서 어떤 현상을 조사했나요?"],
+        ["1학년 동아리활동 · 키토산 추출 과정", "Q033. 키토산 실험에서 어떤 처리 단계를 살폈나요?"],
+        ["1학년 동아리활동 · 해조류 흡착과 COD·BOD", "Q037. 흡착 실험에서 예상과 달랐던 결과는 무엇인가요?"],
+        ["2학년 동아리활동 · 폴리페놀 자외선 차단제", "Q041. 천연 차단제 활동에서 어떤 대상을 비교했나요?"],
+        ["2학년 동아리활동 · 리모넨과 스티로폼 재활용", "Q045. 리모넨 실험을 고안한 계기는 무엇인가요?"],
+        ["3학년 동아리활동 · 자성으로 미세플라스틱 회수", "Q049. 전기응집 심화 탐구에서 어떤 회수 방식을 살폈나요?"],
+        ["3학년 동아리활동 · 전류와 부반응", "Q053. 전류를 바꾸며 어떤 한계를 분석했나요?"],
+        ["2학년 수학Ⅰ · 로그스케일과 수소이온농도", "Q107. 수학Ⅰ에서 로그를 어떻게 활용했나요?"],
+        ["2학년 물리학Ⅰ · 폐열 재사용과 열역학", "Q123. 폐열 발표에서 어떤 기술을 비교했나요?"],
+        ["2학년 과학과제 연구 · 전극 재료 비교", "Q143. 과학과제 연구에서 어떤 전극을 비교했나요?"],
+        ["2학년 과학과제 연구 · 아연 전극과 2차 오염", "Q147. 높은 효율을 보인 아연 결과를 왜 재검토했나요?"],
+        ["3학년 미적분 · 미세플라스틱 침강", "Q167. 침강속도 탐구에서 어떤 힘을 고려했나요?"],
+        ["3학년 경제 수학 · 환경세와 피구세", "Q183. 환경세를 경제 수학과 어떻게 연결했나요?"],
+        ["3학년 수학과제 탐구 · 로지스틱 모델과 수확", "Q187. 수확량을 넣은 로지스틱 모델로 무엇을 설명했나요?"],
+        ["3학년 수학과제 탐구 · 카펜터 모델과 임계전이", "Q191. 호수 모델에서 어떤 급격한 변화를 살폈나요?"],
+        ["3학년 화학Ⅱ · PETase와 스캐폴드", "Q195. 스캐폴드 시스템에서 어떤 개선 가능성을 보았나요?"],
+        ["3학년 화학Ⅱ · 직접해양포집과 에너지", "Q199. DOC 발표에서 무엇을 연결해 설명했나요?"],
+        ["3학년 인공지능 기초 · 해양 쓰레기와 적조 데이터", "Q213. 해양 쓰레기 자료에서 월별 비율을 사용한 이유는 무엇인가요?"],
+        ["최종 핵심 점검 | 환경공학과", "Q219. 환경공학을 선택한 동기와 가장 직접 연결되는 실험은 무엇인가요?"],
+        ["최종 핵심 점검 | 에너지환경공학과", "Q224. 에너지환경공학과에 지원한 동기는 무엇인가요?"],
+        ["최종 핵심 점검 | 사회환경공학부", "Q229. 사회환경공학부 지원동기를 운동장 개선이나 수처리와 연결해 보세요."],
+        ["최종 핵심 점검 | 환경융합공학과", "Q234. 환경융합공학과에서 연결해 공부하고 싶은 분야는 무엇인가요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q239. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."]
+      ],
+      "김희태": [
+        ["1학년 자율활동 · 자서전과 타인 이해 논증", "Q001. 타인을 이해할 수 없다는 주장과 공감하는 간호사라는 목표는 모순 아닌가요?"],
+        ["1학년 자율활동 · 사형제 토론", "Q003. 사형 반대 논거 중 가장 중요하게 보는 것은 무엇인가요?"],
+        ["2학년 자율활동 · 부회장과 에너지 균형 탐구", "Q005. 기초대사량과 활동에 따른 소비는 어떻게 다른가요?"],
+        ["2학년 자율활동 · VR 치료의 가능성과 한계", "Q007. VR을 치료에 활용한다는 발상에서 무엇이 흥미로웠나요?"],
+        ["3학년 자율활동 · 첨단재생의료 뉴스 분석", "Q009. 시장 전망과 치료 효과는 같은 근거인가요?"],
+        ["3학년 자율활동 · 지역 의료 610개 시설 분석", "Q011. 의료기관이 많은데 왜 접근성이 낮을 수 있나요?"],
+        ["1학년 진로활동 · 비전스쿨과 봉사의 진로 의미", "Q013. 간호사·의사 단체 등 표현이 다른데 진로의 공통점은 무엇인가요?"],
+        ["2학년 진로활동 · 간호 실습과 현실 직시 프로젝트", "Q019. 실습과 인터뷰에서 공통으로 배운 점은 무엇인가요?"],
+        ["2학년 진로활동 · 아스피린·페니실린 제조 비교", "Q021. 제조 방식의 차이를 분자량만으로 설명할 수 있나요?"],
+        ["3학년 진로활동 · 성 건강 지식 콘서트", "Q025. 민감한 건강 주제를 어떻게 전달하려 했나요?"],
+        ["3학년 진로활동 · 교대근무와 체력 준비", "Q027. 체력이 중요한 이유를 어떻게 이해했나요?"],
+        ["1학년 동아리활동 · 뇌과학 간호 인포그래픽", "Q033. 경두개 자기 자극과 전기경련치료를 단순 모니터링 도구로 설명해도 되나요?"],
+        ["2학년 동아리활동 · 페니실린 추출과 조장 역할", "Q035. 추출 실험에서 조장으로 무엇을 관리했나요?"],
+        ["2학년 동아리활동 · 전기영동 밴드 해석", "Q043. 전기영동은 무엇을 이용해 시료를 나누나요?"],
+        ["3학년 동아리활동 · 플라스미드·제한효소 DNA 분석", "Q047. 플라스미드와 제한효소는 각각 어떤 역할을 하나요?"],
+        ["3학년 확률과 통계 · 확률·분배·폐암 검사 해석", "Q145. 검사 양성이면 실제 환자일 확률은 민감도와 같은가요?"],
+        ["3학년 화학Ⅱ · 약물의 흡수·대사·배출", "Q165. 모든 약이 소화관·간·신장 순서로만 처리되나요?"],
+        ["3학년 화학Ⅱ · 탄산 완충계와 과호흡", "Q167. 과호흡으로 이산화탄소가 감소하면 pH는 어떤 방향으로 변할 수 있나요?"],
+        ["3학년 생명과학Ⅱ · 수면 데이터와 다중 모달 AI", "Q171. 다중 모달은 무엇인가요? 위험을 예측하면 질병을 확진한 것인가요?"],
+        ["지원동기 · 가천대 자유전공학부", "Q191. 간호 진로에 관심이 있었는데 자유전공학부를 선택한 이유는 무엇인가요?"],
+        ["지원동기 · 가천대 자유전공학부", "Q194. 610개 의료시설 분석에서 시설 수와 접근성은 어떻게 다른가요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q196. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."]
+      ],
+      "박준서": [
+        ["1학년 자율활동 · 무회전 축구공과 학급 회장", "Q003. 무회전 공과 회전하는 공의 휘어짐은 어떻게 다른가요?"],
+        ["2학년 자율활동 · 탄소배출권과 오염 지도", "Q005. 탄소배출권 제도와 지역 오염 문제를 왜 함께 보았나요?"],
+        ["2학년 자율활동 · 화학 독서·리튬이온전지·ESS", "Q007. 리튬이온전지에서 이온과 전자는 어떤 경로로 움직이나요?"],
+        ["3학년 자율활동 · 325W 미니 태양광의 비용 회수", "Q013. 약 1년이라는 회수 기간은 어떤 의미인가요?"],
+        ["1학년 진로활동 · TLC 진통제 성분 비교", "Q015. TLC에서 Rf는 어떻게 정의하나요?"],
+        ["2학년 진로활동 · 핵폐기물과 벤토나이트 다중 방벽", "Q019. 벤토나이트를 방벽 재료로 검토하는 이유는 무엇인가요?"],
+        ["3학년 진로활동 · 백금 나노촉매와 Ni-rich 양극", "Q023. 백금을 나노화하면 어떤 장점을 기대하나요?"],
+        ["3학년 진로활동 · AI 캠프·가상 공정 수율·RMSE", "Q025. RMSE는 무엇을 나타내나요?"],
+        ["2학년 동아리활동 · 바이오매스·리그닌·탄소중립", "Q031. 바이오매스는 재생 가능하므로 무조건 탄소중립인가요?"],
+        ["3학년 동아리활동 · 해수 광촉매와 Z-scheme", "Q035. Z-scheme의 핵심 아이디어를 간단히 설명해 보세요."],
+        ["3학년 동아리활동 · 흑미 DSSC와 0.14V 관찰", "Q037. 염료감응 태양전지에서 색소와 TiO2는 어떤 역할인가요?"],
+        ["2학년 화학Ⅰ · 페로브스카이트 구조와 성능 비교", "Q091. 페로브스카이트의 조성이 중요한 이유는 무엇인가요?"],
+        ["3학년 확률과 통계 · 덴드라이트·단락 시간·생존분석", "Q125. 단락 여부를 이항분포로 보면 무엇을 놓치나요?"],
+        ["3학년 화학Ⅱ · 덴드라이트·SEI·3차원 집전체", "Q149. 덴드라이트가 생기는 원인을 하나만 말할 수 있나요?"],
+        ["3학년 과학과제 연구 · EDTA 킬레이트와 초기 조건 통제", "Q155. EDTA가 금속 이온과 킬레이트를 만든다는 것은 무엇인가요?"],
+        ["3학년 과학과제 연구 · 아두이노 RGB·조도센서와 공정 감시", "Q157. 조도센서의 값이 곧 금속 이온 농도인가요?"],
+        ["최종 핵심 점검 | 화학공학과", "Q179. 화학공학과를 선택한 이유와 학업 계획은 무엇인가요?"],
+        ["최종 핵심 점검 | 화학공학과", "Q181. EDTA·RGB·조도센서 연구에서 통제한 조건과 한계는 무엇인가요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q184. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."]
+      ],
+      "장부태": [
+        ["1학년 자율활동", "Q001. 시어핀스키 피라미드의 자기유사성이란 무엇인가요?"],
+        ["2학년 자율활동", "Q007. 역삼투 멤브레인은 어떤 문제를 해결하나요?"],
+        ["3학년 자율활동", "Q013. MOF 스마트 센서는 무엇을 선택적으로 감지하나요?"],
+        ["1학년 진로활동", "Q019. 비전스쿨에서 제시한 탄소섬유의 목표는 무엇인가요?"],
+        ["2학년 진로활동", "Q025. 바이오 탄소섬유의 탄소 저감 수치 출처는 무엇인가요?"],
+        ["3학년 진로활동", "Q031. 분말 MOF를 나노섬유에 고정한 이유는 무엇인가요?"],
+        ["1학년 동아리활동", "Q037. 바나나향 합성의 반응물과 생성물은 무엇인가요?"],
+        ["2학년 동아리활동", "Q043. 키토산·젤라틴을 함께 사용한 이유는 무엇인가요?"],
+        ["3학년 동아리활동", "Q049. 모의 약물전달 실험의 가설과 비교 조건은 무엇인가요?"],
+        ["1학년 과학탐구실험", "Q091. 나일론 6,6의 단위체와 계면중합은 무엇인가요?"],
+        ["2학년 물리학Ⅰ", "Q163. p형·n형 도핑을 설명해 주세요."],
+        ["3학년 미적분", "Q217. S(t)=Se(1-e^(-kt))의 변수와 초기값은 무엇인가요?"],
+        ["3학년 물리학Ⅱ", "Q247. TENG의 접촉 대전과 정전기 유도는 무엇인가요?"],
+        ["3학년 화학Ⅱ", "Q253. MOF의 다공성과 촉매 역할은 무엇인가요?"],
+        ["3학년 과학과제 연구", "Q265. CMC·알긴산·칼슘 이온의 역할은 무엇인가요?"],
+        ["최종 핵심 점검 | 인하대 신소재공학과", "Q291. 신소재공학과를 선택한 이유는?"],
+        ["최종 핵심 점검 | 인하대 신소재공학과", "Q292. 화학공학과에 관심을 보였는데 왜 신소재공학과인가?"],
+        ["최종 핵심 점검 | 인하대 신소재공학과", "Q296. 천연 고분자라면 완성된 소재도 안전하고 친환경적인가?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q301. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."]
+      ],
+      "김경원": [
+        ["1학년 자율활동 · 건식 전극 사업 계획", "Q001. 나의 기업 박람회에서 제안한 기술은 무엇인가요?"],
+        ["2학년 자율활동 · 실리콘 음극재 개선", "Q005. 실리콘 음극재의 한계를 보완할 어떤 방법을 조사했나요?"],
+        ["2학년 자율활동 · 활성탄 복합 비드", "Q009. 미세먼지 공동 탐구에서 어떤 재료를 비교했나요?"],
+        ["3학년 자율활동 · 고분자 바인더와 열가교", "Q013. 팟캐스트에서 바인더에 주목한 이유는 무엇인가요?"],
+        ["2학년 진로활동 · 스마트그리드와 LTO", "Q025. 스마트그리드용 배터리에서 어떤 특성을 살폈나요?"],
+        ["3학년 진로활동 · LTO와 실리콘의 결합 구상", "Q037. 프론티어 랩에서 실리콘을 함께 고려한 목적은 무엇인가요?"],
+        ["3학년 진로활동 · LMNO의 도핑과 코팅", "Q041. LMNO에서 해결하려 한 문제는 무엇이었나요?"],
+        ["1학년 동아리활동 · 교내 태양광 발전 분석", "Q045. 24개월 발전량에서 어떤 요인을 비교했나요?"],
+        ["2학년 동아리활동 · 산불 소화제의 환경 영향", "Q057. 산불 소화제에서 어떤 2차 영향을 살폈나요?"],
+        ["3학년 동아리활동 · 흑미 염료감응형 태양전지", "Q061. 직접 만든 태양전지의 주요 재료는 무엇이었나요?"],
+        ["2학년 물리학Ⅰ · 렉테나의 에너지 흐름", "Q133. 렉테나 발표에서 에너지의 흐름을 어떻게 설명했나요?"],
+        ["2학년 기하 · 정사면체와 메테인 결합각", "Q145. 기하 캠프에서 어떤 각도를 구했나요?"],
+        ["3학년 미적분 · 온도와 아레니우스 식", "Q181. 스마트폰 경험을 어떤 식과 연결했나요?"],
+        ["3학년 물리학Ⅱ · 쇼트키 다이오드의 고주파 동작", "Q201. 물리학Ⅱ에서 렉테나 탐구를 어떻게 심화했나요?"],
+        ["3학년 화학Ⅱ · PET에서 배터리 소재로", "Q205. 화학Ⅱ에서 PET 재활용을 어떤 경로로 설명했나요?"],
+        ["최종 핵심 점검 | 나노신소재공학과", "Q227. 나노신소재공학과에 지원하게 된 구체적인 활동은 무엇인가요?"],
+        ["최종 핵심 점검 | 화학공학과", "Q232. 화학공학과를 선택한 이유를 소재 연구와 공정 설계의 관점에서 말해 보세요."],
+        ["최종 핵심 점검 | 에너지시스템공학부", "Q237. 에너지시스템공학부에서 해결하고 싶은 문제는 무엇인가요?"],
+        ["최종 핵심 점검 | 화공·생명·에너지공학부", "Q242. 이 학부의 여러 분야 중 무엇에 관심이 있고 왜 지원했나요?"],
+        ["최종 핵심 점검 | 마지막 실전 질문", "Q252. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요."]
+      ],
+      "신승환": [
+        ["봉사활동 실적", "Q001. 봉사활동 중 자신이 참여한 활동과 그 의미를 설명해 주세요."],
+        ["2학년 자율활동", "Q008. 2학년 자율활동의 「미래 기후 변화에 대해 기상 예측 시스템은 어떻게 발전해야 할까?」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["2학년 기하", "Q069. 2학년 기하의 「게임 내 도로망 설계에서 벡터를 활용한 이동, 커브 설계」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["3학년 화법과 작문", "Q083. 3학년 화법과 작문의 「빅데이터의 진실, 편리함 뒤에 숨겨진 분열의 시대」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["국립한국교통대학교 · 지원대학", "Q110. 자동차공학과에 지원한 동기는 무엇인가요?"],
+        ["건국대학교(글로컬) · 지원대학", "Q112. 메카트로닉스공학과에 지원한 동기는 무엇인가요?"],
+        ["성공회대학교 · 지원대학", "Q114. 소프트웨어융합학부에 지원한 동기는 무엇인가요?"],
+        ["우송대학교 · 지원대학", "Q116. 철도시스템학부 철도소프트웨어전공에 지원한 동기는 무엇인가요?"],
+        ["한국공학대학교 · 지원대학", "Q118. 메카트로닉스공학부(메카트로닉스전공)에 지원한 동기는 무엇인가요?"],
+        ["실전 점검", "Q126. 가장 자신 있는 탐구를 배경지식이 없는 사람에게 30초 안에 설명해 주세요."],
+        ["최종 발언", "Q143. 마지막으로 생기부에서 꼭 강조하고 싶은 점은 무엇인가요?"]
+      ],
+      "김지안": [
+        ["1학년 동아리활동", "Q005. 1학년 동아리활동의 「게임 제재의 역사」에서 무엇을 비교했으며, 어떤 차이 또는 특징을 설명했나요?"],
+        ["1학년 진로활동", "Q010. 1학년 진로활동의 「게임 개발자가 하는 일」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["2학년 자율활동", "Q012. 2학년 자율활동의 「VR 프로그래밍에서 사용자의 몰입감을 극대화하는 핵심 요소는 무엇일까?」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["1학년 통합과학", "Q039. 1학년 통합과학의 「게임 속 물리법칙」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["2학년 기하", "Q076. 2학년 기하의 「게임에서의 정사영의 역할」에서 사용한 수학적 개념과 탐구 내용을 설명해 주세요."],
+        ["2학년 프로그래밍", "Q086. 2학년 프로그래밍의 「낚시 게임」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["3학년 생활과 윤리", "Q101. 3학년 생활과 윤리의 「확률형 아이템에서 이용자의 자율성과 공정성을 어떻게 함께 보장할 수 있는가?」에서 어떤 내용을 탐구했나요?"],
+        ["3학년 물리학Ⅱ", "Q114. 3학년 물리학Ⅱ의 「그래픽카드 5090 GPU의 성능 향상과 클록감소의 물리적 원인」에서 수행한 조사 내용을 설명해 주세요."],
+        ["지원대학 · 컴퓨터/SW/AI", "Q125. 컴퓨터공학과 및 소프트웨어융합학부에 지원한 동기는 무엇인가요?"],
+        ["실전 점검", "Q139. 가장 자신 있는 탐구를 배경지식이 없는 사람에게 30초 안에 설명해 주세요."]
+      ],
+      "안이환": [
+        ["2학년 자율활동", "Q011. 2학년 자율활동의 「화성 테라포밍의 실현을 위한 핵심기술은 무엇이며, 어떻게 구현 가능할까?」에서 어떤 계획을 다뤘나요?"],
+        ["2학년 진로활동", "Q017. 2학년 진로활동의 「건물 정보 모델링 기술을 활용한 효율적 건축 설계」에서 어떤 제작·설계 활동을 다뤘나요?"],
+        ["1학년 국어", "Q029. 1학년 2학기 국어의 「빌트: 우리가 지어올린 모든 것의 역사」에서 어떤 입장을 제시했으며, 그 근거는 무엇이었나요?"],
+        ["2학년 화학Ⅰ", "Q073. 2학년 화학Ⅰ의 「친환경 건축 통합설계 디자인 전략」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["3학년 화학Ⅱ", "Q111. 3학년 화학Ⅱ의 「촉매, 그리고 친환경 건축」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["광운대학교 · 지원대학", "Q122. 건축공학과에 지원한 동기와 입학 후 공부하고 싶은 내용은 무엇인가요?"],
+        ["인천대학교 · 지원대학", "Q130. 도시공학과에 지원한 동기와 입학 후 공부하고 싶은 내용은 무엇인가요?"],
+        ["수원대학교 · 지원대학", "Q132. 건축학과 및 AI데이터과학부에 지원한 동기는 무엇인가요?"],
+        ["실전 점검", "Q136. 가장 자신 있는 탐구를 배경지식이 없는 사람에게 30초 안에 설명해 주세요."]
+      ],
+      "장예준": [
+        ["1학년 국어", "Q029. 1학년 국어의 「챗 GPT의 개발 및 원리 탐구」에서 읽은 내용과 자신의 관심 주제를 어떻게 연결했나요?"],
+        ["1학년 통합과학", "Q041. 1학년 통합과학의 「통합과학과 소프트웨어」에서 무엇을 비교했으며, 어떤 차이 또는 특징을 설명했나요?"],
+        ["3학년 물리학Ⅱ", "Q110. 3학년 물리학Ⅱ의 「생성형 AI 성능 향상에 따른 에너지 효율 저하와 물리적 한계」에서 수행한 탐구 과정을 설명해 주세요."],
+        ["3학년 화학Ⅱ", "Q112. 3학년 화학Ⅱ의 「AI 기반 단백질 설계를 활용한 효소 촉매 개발」 및 「AI 서버 냉각 유체」 탐구 내용을 설명해 주세요."],
+        ["동국대학교 · 지원대학", "Q126. 컴퓨터·AI학부에 지원한 동기는 무엇인가요?"],
+        ["세종대학교 · 지원대학", "Q128. AI로봇학과에 지원한 동기는 무엇인가요?"],
+        ["한양대학교(ERICA) · 지원대학", "Q130. ICT융합학부에 지원한 동기는 무엇인가요?"],
+        ["건국대학교 · 지원대학", "Q132. 인공지능학과에 지원한 동기는 무엇인가요?"],
+        ["경희대학교 · 지원대학", "Q134. 미래정보디스플레이학부에 지원한 동기는 무엇인가요?"],
+        ["숭실대학교 · 지원대학", "Q136. 지능전자공학부에 지원한 동기는 무엇인가요?"]
+      ],
+      "김민철": [
+        ["2학년 자율활동", "Q010. 2학년 자율활동의 「지속가능한 건축에서 AI의 역할은 어디까지 확장될 수 있을까?」에서 본인의 역할과 사례를 설명해 주세요."],
+        ["2학년 진로활동", "Q016. 2학년 진로활동의 「지속 가능한 건축과 친환경 설계」에서 어떤 제작·설계 활동을 다뤘나요?"],
+        ["3학년 진로활동", "Q024. 3학년 진로활동의 「공간의 창조(배상민)」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["2학년 기하", "Q071. 2학년 기하의 「이슬람 건축에서의 모자이크」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["3학년 심화 국어", "Q098. 3학년 심화 국어의 「철거 대신 재건축으로 이웃이 함께 어울려 살 수 있는 건축은 가능한가」에서 표현한 내용은 무엇인가요?"],
+        ["지원대학 · 건설/안전/환경", "Q115. 건설시스템공학과 · 안전공학과 · 스마트시티환경공학과에 지원한 동기는 무엇인가요?"],
+        ["실전 점검", "Q125. 가장 자신 있는 탐구를 배경지식이 없는 사람에게 30초 안에 설명해 주세요."]
+      ],
+      "정원준": [
+        ["1학년 동아리활동", "Q005. 1학년 동아리활동의 「미래를 바꾼 아홉가지 알고리즘」에서 어떤 입장을 제시했으며, 그 근거는 무엇이었나요?"],
+        ["2학년 진로활동", "Q015. 2학년 진로활동의 「회귀를 통한 머신러닝」에서 무엇을 비교했으며, 어떤 특징을 설명했나요?"],
+        ["3학년 자율활동", "Q018. 3학년 자율활동의 「실시간 제어와 개인정보 보호를 어떻게 함께 달성할 것인가」에서 어떤 입장을 제시했나요?"],
+        ["3학년 진로활동", "Q023. 3학년 진로활동의 「Adam 옵티마이저」에서 사용한 수학적 개념과 탐구 내용을 설명해 주세요."],
+        ["1학년 통합과학", "Q040. 1학년 통합과학의 「유전자 알고리즘」에서 발표한 내용의 핵심은 무엇인가요?"],
+        ["2학년 생명과학Ⅰ", "Q078. 2학년 생명과학Ⅰ의 「DNA 데이터 저장 기술」에서 조사한 내용과 과정을 설명해 주세요."],
+        ["3학년 지구과학Ⅱ", "Q124. 3학년 지구과학Ⅱ의 「지진파를 통한 진앙 계산 알고리즘」에서 사용한 수학적 개념을 설명해 주세요."],
+        ["지원대학 · 컴퓨터/전자", "Q135. 서울시립대 전자전기컴퓨터공학부 · 고려대 컴퓨터학과 · 성균관대/서강대 컴퓨터공학과 지원 동기는 무엇인가요?"],
+        ["실전 점검", "Q145. 가장 자신 있는 탐구를 배경지식이 없는 사람에게 30초 안에 설명해 주세요."]
+      ],
+      "양민건": [
+        ["2학년 자율활동", "Q011. 2학년 자율활동의 「탈영웅화 이론」에서 검토한 가설이나 문제점과 대응 과정을 설명해 주세요."],
+        ["1학년 국어", "Q023. 1학년 1학기 국어의 「나의 직업, 군인」에서 어떤 입장을 제시했으며, 그 근거는 무엇이었나요?"],
+        ["2학년 영어Ⅰ", "Q066. 2학년 영어Ⅰ의 「인공지능이 인간보다 공정한 결정을 내릴 수 있는가」에서 무엇을 비교했나요?"],
+        ["2학년 음악 연주", "Q083. 2학년 음악 연주의 「음악이 역사적으로 군인에게 준 영향」에서 발표한 핵심은 무엇인가요?"],
+        ["3학년 생활과 윤리", "Q102. 3학년 생활과 윤리의 「롤스의 분배적 정의에 따르면 국가를 위해 기본권을 제한받는 군인에 대한 우선적 보상은 정당한가?」 탐구 내용을 설명해 주세요."],
+        ["3학년 융합과학", "Q111. 3학년 융합과학의 「군인을 위한 친환경 신소재 폴리에스터」 발표 핵심은 무엇인가요?"],
+        ["지원대학 · 안보/국방AI/자유전공", "Q125. 상명대 국가안보학과 · 세종대 국방AI융합시스템공학과 · 가천대 AI인문대학 지원 동기는 무엇인가요?"]
+      ],
+      "장서진": [
+        ["고분자공학과 · 지원동기", "Q001. 키토산 하이드로겔 탐구가 고분자공학과 지원으로 어떻게 이어졌나요?"],
+        ["고분자공학과 · 하이드로겔", "Q002. 하이드로겔은 물에 녹은 고분자 용액과 어떻게 다른가요?"],
+        ["1학년 동아리 · 에스터화 평형", "Q005. 1학년 동아리에서 바나나향 향료를 어떻게 합성했나요?"],
+        ["2학년 자율 · 비어-람베르트 법칙", "Q013. 2학년 아스피린 합성 후 어떤 분석 주제를 탐구했나요?"],
+        ["2학년 동아리 · 키토산 팽윤과 가교", "Q017. 키토산과 젤라틴 하이드로겔에서 무엇을 비교했나요?"],
+        ["2학년 동아리 · 졸-겔 전이", "Q021. 삼블록 공중합체 사례에서 어떤 점에 주목했나요?"],
+        ["2학년 진로 · 초박막 분리막", "Q029. 연구원 탐방 후 초박막 분리막에 관심을 가진 이유는 무엇인가요?"],
+        ["3학년 자율 · 라만 분광학", "Q037. 3학년 라만 분석은 2학년 분석과 무엇이 달라졌나요?"],
+        ["3학년 동아리 · ZIF-8 촉매 지지체", "Q045. 알지네이트 지지체에서 ZIF-8로 관심을 확장한 이유는 무엇인가요?"],
+        ["2학년 물리학Ⅰ · 포토레지스트", "Q065. 물리학Ⅰ에서 포토레지스트를 탐구한 계기는 무엇인가요?"],
+        ["2학년 화학Ⅰ · 나일론 합성", "Q069. 나일론 합성 비교실험에서 어떤 의문을 확인하려 했나요?"],
+        ["3학년 과학과제 연구 · 펜톤 반응", "Q089. 과학과제연구에서 1·2차 실험의 문제를 어떻게 해석했나요?"],
+        ["3학년 인공지능 기초 · 화학물질 분류", "Q097. 화학물질 이미지 분류를 탐구한 계기와 안전 한계는 무엇인가요?"]
+      ],
+      "정세영": [
+        ["1학년 동아리활동", "Q006. 1학년 동아리활동의 「미래를 열어가는 탄소재료의 힘」에서 어떤 입장을 제시했나요?"],
+        ["2학년 자율활동", "Q010. 2학년 자율활동의 「자동차의 지능화 수준을 결정하는 차량용 반도체의 핵심 기능과 발전 방향」 발표 핵심은 무엇인가요?"],
+        ["3학년 동아리활동", "Q022. 3학년 동아리활동의 「폰 노이만 구조」에서 어떤 내용을 탐구하거나 수행했는지 구체적으로 설명해 주세요."],
+        ["1학년 국어", "Q027. 1학년 2학기 국어의 「진짜 하루만에 이해하는 반도체 산업」에서 어떤 계획을 다뤘나요?"],
+        ["2학년 화학Ⅰ", "Q071. 2학년 화학Ⅰ의 「반도체가 그렇게 중요한가요?」에서 어떤 제작·설계 활동을 다뤘나요?"],
+        ["3학년 화법과 작문", "Q091. 3학년 화법과 작문의 「AI 시대를 움직이는 핵심 기술, HBM」에서 무엇을 비교했나요?"],
+        ["3학년 물리학Ⅱ", "Q108. 3학년 물리학Ⅱ의 「3nm 이하 반도체의 양자 터널링 한계와 GAA 구조의 제어 원리」 탐구 과정을 설명해 주세요."],
+        ["지원대학 · 반도체/전자공학", "Q123. 가천대 시스템반도체학과 · 수원대 반도체공학과 · 한국공학대 나노반도체공학전공 지원 동기는 무엇인가요?"]
+      ],
+      "김나을": [
+        ["1학년 진로활동", "Q010. 「인간의 창작 활동을 인공지능과 협업하여 진행한다면 더욱 뛰어난 결과물이 나오지 않을까?」에서 관심 주제를 어떻게 연결했나요?"],
+        ["2학년 진로활동", "Q018. 「대화형 게임에서 생성형 AI 기술은 플레이어에게 어떤 새로운 경험을 제공할까?」에서 무엇을 비교했나요?"],
+        ["3학년 자율활동", "Q024. 3학년 자율활동의 「혼합형 장기기억 구조」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["2학년 생명과학Ⅰ", "Q082. 2학년 생명과학Ⅰ의 「스파이킹 신경망과 기존 신경망의 비교」에서 어떤 차이 또는 특징을 설명했나요?"],
+        ["2학년 음악 연주", "Q092. 2학년 음악 연주의 「음악 AI로 게임 BGM 만들기」에서 어떤 제작·설계 활동을 다뤘나요?"],
+        ["3학년 미적분", "Q108. 3학년 미적분의 「Sigmoid와 ReLU 함수의 수학적 성질이 신경망 학습에 반영되는 과정에 대한 분석」 탐구 내용을 설명해 주세요."],
+        ["3학년 인공지능 기초", "Q134. 3학년 인공지능 기초의 「생성형 인공지능 기반 게임 캐릭터 시스템 설계」 내용을 설명해 주세요."],
+        ["지원대학 · AI/소프트웨어", "Q139. 가천대/한국공학대 인공지능학과 · 경기대 AI컴퓨터공학부 · 연세대(미래) 소프트웨어학부 지원 동기는 무엇인가요?"]
+      ],
+      "소하람": [
+        ["1학년 진로활동 · 물로켓과 포물선", "Q013. 물로켓 측정값과 계산값을 비교하며 무엇을 발견했나요?"],
+        ["2학년 자율활동 · GPS의 시간 오차", "Q017. GPS 발표에서 왜 시계 오차를 강조했나요?"],
+        ["2학년 동아리활동 · 낙하산 항력 실험", "Q021. 낙하산 실험에서 영상으로 무엇을 측정했나요?"],
+        ["2학년 동아리활동 · 단진자 중력가속도", "Q025. 단진자 실험에서 바꿔 본 조건은 무엇인가요?"],
+        ["2학년 진로활동 · MEMS 가속도 센서", "Q029. 임베디드 활동에서 왜 가속도 센서를 더 조사했나요?"],
+        ["3학년 자율활동 · 양자점 연료 전환", "Q037. 양자점 시뮬레이션에서 조절한 주요 변수는 무엇인가요?"],
+        ["3학년 동아리활동 · 양자점 발광과 크기", "Q041. 양자점의 발광에서 가장 궁금했던 현상은 무엇인가요?"],
+        ["2학년 기하 · 벡터로 교통사고 분석", "Q069. 교통사고 분석에서 속력만으로 부족한 이유는 무엇인가요?"],
+        ["2학년 과학과제 연구 · 폐열 발전 연구", "Q073. 폐열 발전 연구에서 어떤 실험상 제약을 겪었나요?"],
+        ["3학년 물리학Ⅱ · 음파 부양과 정상파", "Q089. 음파 부양에서 먼저 탐구한 파동 현상은 무엇인가요?"],
+        ["3학년 융합과학 · 로켓 방정식의 한계", "Q093. 로켓 방정식을 유도할 때 어떤 두 대상을 나눴나요?"],
+        ["전공별 핵심 점검 · 물리학과", "Q101. 심리 분야에서 물리학으로 관심이 어떻게 발전했나요?"],
+        ["전공별 핵심 점검 · 기계공학부", "Q106. 기계공학부를 선택한 동기는 물리학과 지원동기와 어떻게 다른가요?"]
+      ],
+      "심우진": [
+        ["지원동기 · 경기대 바이오융합학부", "Q001. 바이오융합학부에 지원한 이유와 입학 후 먼저 하고 싶은 공부는 무엇인가요?"],
+        ["지원동기 · 인천대 분자의생명전공", "Q011. 분자의생명전공 및 생명화학공학과에 지원하게 된 동기는 무엇인가요?"],
+        ["1학년 동아리 · DPPH 해조류 항산화", "Q019. DPPH 반응으로 무엇을 알아볼 수 있나요?"],
+        ["2학년 자율 · 이기적 유전자와 모형", "Q025. 유전자를 모형으로 표현한 이유는 무엇인가요?"],
+        ["3학년 자율 · 후성유전 편집 뉴스", "Q039. 후성유전 조절과 유전자 서열 편집은 어떻게 다른가요?"],
+        ["3학년 동아리 · 텔로미어와 세놀리틱스", "Q043. 텔로미어와 텔로머레이스의 관계를 설명해 보세요."],
+        ["3학년 진로 · DNA 메틸화와 세포 분화", "Q045. 같은 DNA를 가진 세포가 다른 기능을 하는 이유는요?"],
+        ["1학년 통합과학 · CRISPR 방어 체계", "Q067. CRISPR에서 안내 RNA와 Cas의 역할은 무엇인가요?"],
+        ["3학년 생명과학Ⅱ · 활성산소와 재프로그래밍", "Q131. 유도만능줄기세포의 장점과 안전성 과제는 무엇인가요?"],
+        ["3학년 인공지능 기초 · CNN 노화세포 분류", "Q137. CNN이 노화세포 이미지를 분류한다는 것은 무엇인가요?"]
+      ],
+      "이지용": [
+        ["1학년 진로활동", "Q008. 1학년 진로활동의 「분자조각가들(백승만)」에서 조사한 내용과 과정을 설명해 주세요."],
+        ["2학년 자율활동", "Q012. 2학년 자율활동의 「버려지는 탄소의 자원화」에서 어떤 내용을 탐구했는지 구체적으로 설명해 주세요."],
+        ["2학년 동아리활동", "Q015. 2학년 동아리활동의 「벌과 임야의 관계」에서 무엇을 비교했으며, 어떤 특징을 설명했나요?"],
+        ["3학년 동아리활동", "Q025. 3학년 동아리활동의 「이중 열돔 조건에서의 새로운 기술」에서 어떤 내용을 탐구했나요?"],
+        ["1학년 수학", "Q033. 1학년 수학의 「효소-기질 복합체」에서 사용한 수학적 개념과 탐구 내용을 설명해 주세요."],
+        ["3학년 화법과 작문", "Q095. 3학년 화법과 작문의 「발효를 조율하는 박테리오파지의 이중적 역할」에서 어떤 계획을 다뤘나요?"],
+        ["3학년 화학Ⅱ", "Q111. 3학년 화학Ⅱ의 「효소 효율 극대화를 통한 식품 산업 혁신」에서 어떤 설계를 다뤘나요?"],
+        ["3학년 생명과학Ⅱ", "Q114. 3학년 생명과학Ⅱ의 「식물학 산책」에서 무엇을 비교했으며, 어떤 특징을 설명했나요?"],
+        ["지원대학 · 생명/식물/원예", "Q133. 경북대 응용생명과학부/식물자원학과 · 공주대 생명과학과 · 강원대 원예학과 지원 동기는 무엇인가요?"]
+      ],
+      "정윤성": [
+        ["2학년 진로 · 기계/메카트로닉스/로봇", "Q001. 스마트모빌리티 경험이 지원 전공 선택에 어떤 영향을 주었나요?"],
+        ["1학년 동아리 · 아두이노 화재 감지기", "Q005. 1학년 동아리의 화재 감지기는 어떻게 작동했나요?"],
+        ["2학년 자율 · 메타버스 원격 제어", "Q021. 메타버스와 로봇 연동 탐구에서 발견한 통신 지연 한계는 무엇인가요?"],
+        ["2학년 동아리 · 3D 프린팅 로봇팔", "Q025. 창의메이커스에서 로봇팔과 관련해 무엇을 했나요?"],
+        ["2학년 진로 · 라인트레이싱과 장애물 회피", "Q029. 자율주행 로봇에서 직접 구현한 기능은 무엇인가요?"],
+        ["2학년 진로 · 메카넘휠 이동", "Q033. 메카넘휠이 옆으로 움직일 수 있는 원리는 무엇인가요?"],
+        ["3학년 동아리 · 풍동 실험과 유동 박리", "Q049. 풍동 실험에서 유동 박리가 항력과 연결되는 이유는 무엇인가요?"],
+        ["3학년 진로 · 경사하강법과 PPO 클리핑", "Q053. 경사하강법을 강화학습과 연결해 탐구한 이유와 PPO 클리핑의 역할은 무엇인가요?"],
+        ["3학년 미적분 · 자코비안과 로봇 운동", "Q077. 미적분 보고서에서 자코비안을 탐구한 이유는 무엇인가요?"],
+        ["3학년 물리학Ⅱ · 역진자와 균형 제어", "Q085. 물리학Ⅱ에서 이족보행로봇을 어떤 모델로 분석했나요?"],
+        ["3학년 과학과제 연구 · 수중 로봇팔", "Q089. 과학과제연구의 수중 로봇팔 보상 함수에는 무엇을 반영했나요?"],
+        ["3학년 가정과학 · 라이다·카메라 SLAM", "Q093. SLAM에서 위치 추정과 지도 작성이 함께 필요한 이유는 무엇인가요?"]
+      ],
+      "이지호": [
+        ["1학년 진로활동", "Q007. 1학년 진로활동의 「포물선 원리를 이용해 알아본 탄도학」에서 무엇을 비교했나요?"],
+        ["2학년 자율활동", "Q010. 2학년 자율활동의 「탄소배출 누적함수의 한계점과 개선방안」에서 사용한 수학적 개념을 설명해 주세요."],
+        ["1학년 국어", "Q026. 1학년 2학기 국어의 「수학 교육자가 되는 법」에서 읽은 내용과 자신의 관심 주제를 어떻게 연결했나요?"],
+        ["2학년 기하", "Q077. 2학년 기하의 「공간좌표계에서 함수의 부피를 구하는 중적분의 원리」 탐구 내용을 설명해 주세요."],
+        ["3학년 물리학Ⅱ", "Q106. 3학년 물리학Ⅱ의 「반도체 신호 왜곡 현상의 푸리에 변환 분석」 탐구 과정을 설명해 주세요."],
+        ["지원대학 · 수학교육/응용수학/SW", "Q119. 성균관대 수학교육과 · 경희대 응용수학과 · 중앙대 소프트웨어학부 · 인하대 사회인프라공학과 지원 동기는 무엇인가요?"]
+      ],
+      "정한길": [
+        ["가천대 자유전공학부 · 지원동기", "Q001. 과학교사를 희망했는데 왜 자유전공에 지원하나요?"],
+        ["강원대 과학교육학부 · 지원동기", "Q189. 과학 연구가 아닌 과학교육을 선택한 이유를 활동으로 설명해 보세요."],
+        ["2학년 동아리 · 편서풍 파동과 한파", "Q205. 지구 평균기온이 오르는데 한파가 올 수 있는 이유는 무엇인가요?"],
+        ["2학년 동아리 · 옥상 기상 관측과 이슬점", "Q209. 옥상 센서와 기상청 자료가 달랐을 때 어떻게 분석했나요?"],
+        ["3학년 동아리 · 탄산염 보상 심도", "Q225. 탄산염 보상 심도 발표에서 강조한 문제는 무엇인가요?"],
+        ["3학년 동아리 · 지진파와 지구 내부", "Q229. 잉게 레만의 내핵 발견에서 무엇을 배웠나요?"],
+        ["3학년 진로 · 우주 쓰레기와 수업 설계", "Q233. 고도가 높아질 때 원궤도 속도와 주기는 어떻게 달라지나요?"],
+        ["2학년 지구과학Ⅰ · 암흑물질과 블랙홀", "Q253. 암흑물질의 존재를 추론하는 근거로 무엇을 소개했나요?"],
+        ["3학년 물리학Ⅱ · 로런츠 힘과 오로라", "Q269. 물리학Ⅱ에서 오로라를 어떤 개념과 연결했나요?"],
+        ["3학년 지구과학Ⅱ · 암석 탐사와 주향·경사", "Q277. 학교 암석 찾기와 뒷산 탐사에서 무엇을 관찰했나요?"],
+        ["3학년 인공지능 기초 · 지진 규모 예측", "Q285. 규모 예측에 분류용 지표를 그대로 적용하면 왜 문제가 되나요?"]
+      ],
+      "김도율": [
+        ["1학년 진로활동", "Q009. 1학년 진로활동의 「사람을 살리는 일」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["2학년 진로활동", "Q014. 2학년 진로활동의 「고위험 기술분야의 안전 설계와 협업 구조」에서 조사한 내용을 설명해 주세요."],
+        ["3학년 동아리활동", "Q022. 3학년 동아리활동의 「혈관화 미세유체 간 오가노이드-온-어-칩」에서 검토한 가설과 대응 과정을 설명해 주세요."],
+        ["1학년 국어", "Q027. 1학년 국어의 「바이러스와 유전병 그리고 백신」에서 자신의 관심 주제를 어떻게 연결했나요?"],
+        ["2학년 지구과학Ⅰ", "Q078. 2학년 지구과학Ⅰ의 「해양 오염 물질 연구에서의 오가노이드 활용 가능성」 발표 핵심은 무엇인가요?"],
+        ["3학년 화법과 작문", "Q094. 3학년 화법과 작문의 「생명공학이 만드는 새로운 가능성과 우리의 윤리적 책임」 탐구 내용을 설명해 주세요."],
+        ["3학년 화학Ⅱ", "Q109. 3학년 화학Ⅱ의 「탈세포화 하이드로겔의 화학적 제작 원리와 광가교성 하이드로겔」 탐구 내용을 설명해 주세요."],
+        ["지원대학 · 바이오/의생명", "Q125. 경기대 바이오융합학부 · 가톨릭대 바이오로직스공학부 · 단국대 의생명과학부 지원 동기는 무엇인가요?"]
+      ],
+      "이종혁": [
+        ["1학년 진로활동 · 신뢰받는 뉴스와 검수", "Q013. 1학년 비전스쿨에서 강조한 방송의 가치는 무엇인가요?"],
+        ["2학년 자율활동 · 그라데이션K와 영화 국적", "Q021. 미키 17을 통해 어떤 기준을 탐구했나요?"],
+        ["2학년 진로활동 · 환경 보도와 감정", "Q029. 환경 보도 보고서에서 어떤 전달 방식을 분석했나요?"],
+        ["3학년 자율활동 · 클립 조회수와 시청률", "Q037. 클립 분석에서 독립변수와 종속변수는 무엇이었나요? 회귀식의 기울기는 어떤 의미인가요?"],
+        ["3학년 동아리활동 · 그린워싱을 검증하는 언론", "Q049. 그린워싱 발표에서 어떤 검증 태도를 강조했나요?"],
+        ["3학년 확률과 통계 · 추천과 확증편향", "Q065. 조건부확률을 추천 알고리즘과 어떻게 연결했나요?"],
+        ["3학년 심화 국어 · 헤드라인 프레이밍", "Q081. 자발적인 프레이밍 분석에서 무엇을 비교했나요?"],
+        ["3학년 인공지능 기초 · 클릭과 베이즈 계산", "Q093. 클릭 5회의 계산에서 어떤 현상을 보여주려 했나요?"],
+        ["3학년 인공지능 기초 · 환경 텍스트 감성 예측", "Q097. 감성 예측의 정답 데이터는 어떤 형태였나요?"],
+        ["전공별 핵심 점검 · 언론홍보학과", "Q101. 언론홍보학과 지원동기와 제작 경험을 연결해 보세요."],
+        ["전공별 핵심 점검 · 데이터과학과", "Q106. 데이터과학과 지원동기를 미디어 탐구와 연결해 보세요."]
+      ],
+      "정시후": [
+        ["2학년 동아리활동", "Q015. 2학년 동아리활동의 「스탬프 적립기」에서 어떤 제작·설계 활동 또는 계획을 다뤘나요?"],
+        ["2학년 진로활동", "Q017. 2학년 진로활동의 「머신러닝 기술 발전에 있어 하드웨어의 역할은 얼마나 중요할까?」에서 무엇을 비교했나요?"],
+        ["1학년 수학", "Q034. 1학년 수학의 「AI, 빅데이터에 숨어 있는 수학의 아름다움」에서 관심 주제를 어떻게 연결했나요?"],
+        ["2학년 기하", "Q088. 2학년 기하의 「3차원에서 2차원으로 변형된 반도체 웨이퍼(판)를 되돌리는 과정」 탐구 내용을 설명해 주세요."],
+        ["3학년 화법과 작문", "Q103. 3학년 화법과 작문의 「반도체, 미래 산업의 씨앗」에서 어떤 계획을 다뤘나요?"],
+        ["지원대학 · 전자공학/임베디드", "Q126. 금오공대 전자공학부 · 한국교통대/한밭대 전자공학과 · 한국공학대 전자공학부(임베디드시스템전공) 지원 동기는 무엇인가요?"]
+      ],
+      "최재웅": [
+        ["2학년 동아리활동", "Q014. 2학년 동아리활동의 「인간을 닮은 기계 휴머노이드 로봇 기술의 발전과 윤리적 공존」 발표 핵심은 무엇인가요?"],
+        ["2학년 동아리활동", "Q015. 2학년 동아리활동의 「하늘을 나는 교실, 드론 동아리가 열어가는 미래」에서 어떤 설계를 다뤘나요?"],
+        ["1학년 진로와 직업", "Q044. 1학년 진로와 직업의 「로펌 변호사와 함께 하는 법률 교육」에서 발표한 내용의 핵심은 무엇인가요?"],
+        ["2학년 수학Ⅱ", "Q061. 2학년 수학Ⅱ의 「미분과 적분을 활용한 로봇팔의 정밀 제어」에서 검토한 가설과 대응 과정을 설명해 주세요."],
+        ["3학년 화법과 작문", "Q088. 3학년 화법과 작문의 「스포츠마케팅의 가치」에서 발표하거나 작성한 내용의 핵심은 무엇인가요?"],
+        ["3학년 인공지능 기초", "Q111. 3학년 인공지능 기초의 「스포츠경기에서 홈그라운드의 이점은 실제로 존재하는가」 발표 핵심은 무엇인가요?"],
+        ["지원대학 · ICT/정보보호/법학", "Q119. 한양대(ERICA) 스마트ICT융합전공 · 인천대 인공지능정보통신공학부 · 가천대 정보보호학과 · 가톨릭대 법학과 지원 동기는 무엇인가요?"]
+      ],
+      "송현준": [
+        ["가톨릭대 · 바이오메디컬화학공학과", "Q001. 바이오메디컬화학공학과에 지원한 동기와 먼저 공부하고 싶은 내용은 무엇인가요?"],
+        ["세종대/숭실대 · 나노신소재공학과", "Q005. 나노신소재공학과 및 신소재공학과에 지원한 동기는 무엇인가요?"],
+        ["인하대 · 고분자공학과", "Q009. 고분자공학과에 지원한 동기는 무엇인가요?"],
+        ["인천대 · 분자의생명전공", "Q011. 분자의생명전공에 지원한 동기는 무엇인가요?"],
+        ["1학년 진로활동 · mRNA 백신", "Q016. mRNA 백신에서 지질 나노입자와 돌기 단백질은 각각 어떤 역할을 하나요?"],
+        ["2학년 자율활동 · 컬러 가이드 키오스크", "Q019. 키오스크의 어느 부분이 이용자를 어렵게 한다고 봤나요?"],
+        ["2학년 진로활동 · 반도체 공정 PFAS", "Q024. PFAS 제거율이 높다는 결과만 보고 공정을 선택하면 무엇을 놓칠까요?"],
+        ["3학년 자율활동 · MOF와 태양광 경제성", "Q027. 금속-유기 구조체의 작은 구멍이 기체 포집에 왜 유리한가요?"],
+        ["3학년 동아리활동 · 플라스미드와 제한효소", "Q030. 플라스미드 추출과 제한효소 처리의 목적은 어떻게 다른가요?"],
+        ["2학년 화학Ⅰ · 페로브스카이트와 염분차 발전", "Q036. 역전기투석에서 염분 농도 차이가 어떻게 전압으로 이어지나요?"],
+        ["3학년 화법과 작문 · 제올라이트 강연", "Q040. 강연에서 제올라이트의 분자체 작용과 경수 연화를 어떻게 구분해 설명했나요?"],
+        ["3학년 생명과학Ⅱ · 히알루로니다아제", "Q047. 히알루로니다아제가 약물 전달에 도움이 되는 원리는 무엇인가요?"]
+      ],
+      "김도운": [
+        ["2학년 자율활동 · 해시와 딥페이크", "Q004. 해시의 고정 길이·충돌·무결성을 설명하면?"],
+        ["2학년 진로활동 · 토양 수분 자동 급수", "Q013. 토양 수분 자동 급수 장치의 입력·판단·출력 과정은?"],
+        ["3학년 진로활동 · 공간정보공학과 연결", "Q016. 전기전자에 대한 관심이 공간정보공학과로 어떻게 이어졌는가?"],
+        ["3학년 동아리활동 · 네트워크 보안", "Q026. HTTP·HTTPS와 대칭키·비대칭키·키 교환의 역할을 구분하면?"],
+        ["1학년 수학 · 가우스 소거법과 RSA", "Q030. 가우스 소거법으로 연립방정식을 푸는 과정과 RSA 탐구 내용은?"],
+        ["1학년 정보 · 정보보안 3대 요소", "Q049. 기밀성·무결성·가용성을 예로 설명하면?"],
+        ["2학년 지구과학Ⅰ · 강릉 수온과 용승", "Q088. 수온 하강과 바람·용승의 관계를 어떤 자료로 확인했는가?"],
+        ["2학년 기하 · 3D mesh와 정사영", "Q090. 3D mesh의 꼭짓점·변·면은 무엇이며 정사영에서 보존·손실되는 정보는?"],
+        ["3학년 언어와 매체 · PUF 하드웨어 보안", "Q105. PUF는 하드웨어의 어떤 차이를 활용하는가?"],
+        ["3학년 지구과학Ⅱ · 클리노미터 주향·경사", "Q130. 클리노미터로 주향·경사를 재는 순서는?"],
+        ["3학년 인공지능 기초 · 웨이퍼 결함 예측", "Q138. 웨이퍼 결함 예측의 입력 변수와 목표값은?"],
+        ["전공별 핵심 점검 · 인하대 공간정보공학과", "Q141. 정보보안·전기전자에 관심을 두다가 공간정보공학과를 선택한 이유는?"]
+      ]
+    };
+
+    // --- 전역 상태 ---
+    let studentQuestionsMap = {};
+    let currentStudentName = "김우현";
+    let filteredQuestions = [];
+    let currentQuestionIndex = 0;
+    let currentCategoryFilter = "ALL";
+
+    let interviewStatus = "idle"; // 'idle' | 'recording' | 'completed' | 'analyzing'
+    let customTimeLimit = 180;
+    let timeLeft = 180;
+    let timerInterval = null;
+
+    let mediaStream = null;
+    let videoRecorder = null;
+    let audioRecorder = null;
+    let videoChunks = [];
+    let audioChunks = [];
+    let recordedAudioBlob = null;
+    let speechRecognition = null;
+
+    let interviewHistory = [];
+
+    // --- 초기 로드 ---
+    window.addEventListener("DOMContentLoaded", () => {
+      initStudentDatabase();
+      renderStudentSelectors();
+      handleSelectStudent("김우현");
+      initMediaStream();
+      initSpeechRecognition();
+      loadSavedApiKey();
+      lucide.createIcons();
+    });
+
+    function initStudentDatabase() {
+      Object.keys(RAW_STUDENT_DB).forEach((name) => {
+        studentQuestionsMap[name] = RAW_STUDENT_DB[name].map((item, idx) => ({
+          id: `${name}-${idx + 1}`,
+          category: item[0],
+          text: item[1]
+        }));
+      });
+    }
+
+    // --- 학생 선택 UI 렌더링 ---
+    function renderStudentSelectors() {
+      const names = Object.keys(studentQuestionsMap).sort((a, b) => a.localeCompare(b, 'ko'));
+      const headerSelect = document.getElementById("studentSelectHeader");
+      const gridContainer = document.getElementById("studentButtonsGrid");
+
+      headerSelect.innerHTML = names.map(name => 
+        `<option value="${name}" class="bg-slate-900 text-white">${name} (${studentQuestionsMap[name].length}문항)</option>`
+      ).join("");
+      headerSelect.value = currentStudentName;
+
+      gridContainer.innerHTML = names.map(name => {
+        const isSelected = name === currentStudentName;
+        const count = studentQuestionsMap[name].length;
+        return `
+          <button onclick="handleSelectStudent('${name}'); switchTab('interview');"
+            class="p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+              isSelected 
+                ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-lg shadow-emerald-950/50' 
+                : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800/60'
+            }">
+            <div class="flex items-center justify-between w-full mb-1">
+              <span class="font-bold text-sm ${isSelected ? 'text-emerald-300' : 'text-white'}">${name}</span>
+              ${isSelected ? '<span class="w-2 h-2 rounded-full bg-emerald-400"></span>' : ''}
+            </div>
+            <span class="text-[11px] text-slate-400">맞춤 질문 ${count}개</span>
+          </button>
+        `;
+      }).join("");
+    }
+
+    // --- 학생 변경 처리 ---
+    function handleSelectStudent(studentName) {
+      if (!studentQuestionsMap[studentName]) return;
+      currentStudentName = studentName;
+      currentCategoryFilter = "ALL";
+      currentQuestionIndex = 0;
+
+      document.getElementById("studentSelectHeader").value = studentName;
+      document.getElementById("currentStudentBadge").textContent = `${studentName} 학생`;
+
+      updateCategoryDropdown();
+      applyQuestionFilter();
+      resetInterview();
+      renderStudentSelectors();
+      renderStudentQuestionList();
+    }
+
+    function updateCategoryDropdown() {
+      const allQs = studentQuestionsMap[currentStudentName] || [];
+      const categories = ["ALL", ...new Set(allQs.map(q => q.category))];
+      const selectEl = document.getElementById("categoryFilterSelect");
+      selectEl.innerHTML = categories.map(cat => 
+        `<option value="${cat}">${cat === "ALL" ? `전체 영역 보기 (${allQs.length})` : cat}</option>`
+      ).join("");
+      selectEl.value = currentCategoryFilter;
+    }
+
+    function handleCategoryFilterChange(category) {
+      currentCategoryFilter = category;
+      currentQuestionIndex = 0;
+      applyQuestionFilter();
+      resetInterview();
+    }
+
+    function applyQuestionFilter() {
+      const allQs = studentQuestionsMap[currentStudentName] || [];
+      if (currentCategoryFilter === "ALL") {
+        filteredQuestions = [...allQs];
+      } else {
+        filteredQuestions = allQs.filter(q => q.category === currentCategoryFilter);
+      }
+      if (filteredQuestions.length === 0) {
+        filteredQuestions = [{ id: "empty", category: "알림", text: "해당 카테고리에 질문이 없습니다." }];
+      }
+      updateCurrentQuestionDisplay();
+    }
+
+    function updateCurrentQuestionDisplay() {
+      const q = filteredQuestions[currentQuestionIndex] || filteredQuestions[0];
+      document.getElementById("questionCounterBadge").textContent = `문항 ${currentQuestionIndex + 1} / ${filteredQuestions.length}`;
+      document.getElementById("questionCategoryBadge").textContent = q.category;
+      document.getElementById("questionTextDisplay").textContent = q.text;
+
+      document.getElementById("prevQBtn").disabled = currentQuestionIndex <= 0 || interviewStatus === "recording";
+      document.getElementById("nextQBtn").disabled = currentQuestionIndex >= filteredQuestions.length - 1 || interviewStatus === "recording";
+    }
+
+    function prevQuestion() {
+      if (currentQuestionIndex > 0 && interviewStatus !== "recording") {
+        currentQuestionIndex--;
+        updateCurrentQuestionDisplay();
+        resetInterview();
+      }
+    }
+
+    function nextQuestion() {
+      if (currentQuestionIndex < filteredQuestions.length - 1 && interviewStatus !== "recording") {
+        currentQuestionIndex++;
+        updateCurrentQuestionDisplay();
+        resetInterview();
+      }
+    }
+
+    function pickRandomQuestion() {
+      if (interviewStatus === "recording" || filteredQuestions.length <= 1) return;
+      const randIdx = Math.floor(Math.random() * filteredQuestions.length);
+      currentQuestionIndex = randIdx;
+      updateCurrentQuestionDisplay();
+      resetInterview();
+    }
+
+    function speakCurrentQuestion() {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const q = filteredQuestions[currentQuestionIndex];
+      if (!q) return;
+      const cleanText = q.text.replace(/^Q\d+\.\s*/i, '');
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 0.98;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // --- 학생 질문 전체 TXT 파일 업로드 파서 (247문항 등 원문 전체 업로드 시 즉시 반영) ---
+    function handleCustomFileUpload(event) {
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result;
+          parseUploadedQuestionText(content, file.name);
+        };
+        reader.readAsText(file, "UTF-8");
+      });
+      event.target.value = "";
+    }
+
+    function parseUploadedQuestionText(content, fileName) {
+      // 합본 파일인지 개별 학생 파일인지 확인
+      const blocks = content.split(/#{15,}/);
+      let lastParsedStudent = null;
+
+      blocks.forEach((block) => {
+        const lines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length === 0) return;
+
+        // 첫 줄에서 "이름 | 최종 면접 질문 목록" 추출 시도
+        let studentName = currentStudentName;
+        const headerMatch = lines[0].match(/^([가-힣]{2,5})\s*\|/);
+        if (headerMatch) {
+          studentName = headerMatch[1].trim();
+        } else if (fileName.includes("_")) {
+          const nameFromFile = fileName.split("_")[0].trim();
+          if (/^[가-힣]{2,5}$/.test(nameFromFile)) studentName = nameFromFile;
+        }
+
+        let currentSection = "공통 질문";
+        let currentSubTopic = "";
+        const parsedList = [];
+
+        lines.forEach((line) => {
+          if (line.startsWith("===") || line.startsWith("총 ") || line.includes("| 최종 면접 질문 목록") || line.includes("| 면접 질문 목록")) {
+            return;
+          }
+          if (line.includes("생기부 기록 시작") || line.includes("최종 핵심 점검") || line.includes("봉사활동 ·")) {
+            currentSection = line.replace(/·\s*생기부 기록 시작.*$/, "").trim();
+            return;
+          }
+          if (line.startsWith("[") && line.endsWith("]")) {
+            currentSubTopic = line.slice(1, -1).trim();
+            return;
+          }
+          if (/^Q\d+[\.\)]/i.test(line)) {
+            const categoryLabel = currentSubTopic ? `${currentSection} · ${currentSubTopic}` : currentSection;
+            parsedList.push({
+              id: `${studentName}-${parsedList.length + 1}`,
+              category: categoryLabel,
+              text: line
+            });
+          }
+        });
+
+        if (parsedList.length > 0) {
+          studentQuestionsMap[studentName] = parsedList;
+          lastParsedStudent = studentName;
+        }
+      });
+
+      if (lastParsedStudent) {
+        renderStudentSelectors();
+        handleSelectStudent(lastParsedStudent);
+      }
+    }
+
+    // --- 학생별 전체 질문 목록 탭 렌더링 ---
+    function renderStudentQuestionList() {
+      const allQs = studentQuestionsMap[currentStudentName] || [];
+      const keyword = (document.getElementById("questionSearchInput")?.value || "").trim().toLowerCase();
+      document.getElementById("studentQuestionListTitle").textContent = `${currentStudentName} 학생의 맞춤형 면접 질문 (${allQs.length}문항)`;
+
+      const filtered = keyword
+        ? allQs.filter(q => q.text.toLowerCase().includes(keyword) || q.category.toLowerCase().includes(keyword))
+        : allQs;
+
+      const container = document.getElementById("studentQuestionsListContainer");
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-xs text-slate-500">검색 조건에 맞는 질문이 없습니다.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((q) => {
+        const origIndex = allQs.findIndex(item => item.id === q.id);
+        return `
+          <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800/90 hover:border-emerald-500/40 flex items-start justify-between gap-4 transition">
+            <div class="space-y-1">
+              <span class="inline-block text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+                ${q.category}
+              </span>
+              <p class="text-xs sm:text-sm text-slate-200 leading-relaxed">${q.text}</p>
+            </div>
+            <button onclick="selectSpecificQuestion(${origIndex})" class="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-bold transition">
+              연습하기
             </button>
           </div>
-        </div>
-      </header>
+        `;
+      }).join("");
+    }
 
-      {/* API 키 입력 모달 (GitHub Pages 등 외부 호스팅 시 사용) */}
-      {showApiModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Key className="w-5 h-5 text-emerald-400" />
-                <span>Gemini API 키 설정 (무료 한도 사용)</span>
-              </h3>
-              <button
-                onClick={() => setShowApiModal(false)}
-                className="text-slate-400 hover:text-white text-sm"
-              >
-                ✕
-              </button>
+    function selectSpecificQuestion(indexInAll) {
+      currentCategoryFilter = "ALL";
+      document.getElementById("categoryFilterSelect").value = "ALL";
+      applyQuestionFilter();
+      currentQuestionIndex = indexInAll;
+      updateCurrentQuestionDisplay();
+      resetInterview();
+      switchTab("interview");
+    }
+
+    // --- 카메라 & 마이크 초기화 ---
+    async function initMediaStream() {
+      const promptBox = document.getElementById("mediaPermissionPrompt");
+      const liveVideo = document.getElementById("liveVideo");
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+          audio: { echoCancellation: true, noiseSuppression: true }
+        });
+        liveVideo.srcObject = mediaStream;
+        liveVideo.classList.remove("hidden");
+        promptBox.classList.add("hidden");
+      } catch (err) {
+        console.warn("미디어 권한 확인 필요:", err);
+        liveVideo.classList.add("hidden");
+        promptBox.classList.remove("hidden");
+      }
+    }
+
+    // --- 음성 인식(STT) 초기화 ---
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+
+      speechRecognition = new SpeechRecognition();
+      speechRecognition.lang = "ko-KR";
+      speechRecognition.continuous = true;
+      speechRecognition.interimResults = true;
+
+      speechRecognition.onresult = (event) => {
+        let finalStr = "";
+        let interimStr = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const txt = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finalStr += txt + " ";
+          else interimStr += txt;
+        }
+        document.getElementById("transcriptInput").value = (finalStr + interimStr).trim();
+      };
+    }
+
+    // --- 타이머 제한 시간 변경 ---
+    function setTimeLimit(seconds) {
+      if (interviewStatus !== "idle") return;
+      customTimeLimit = seconds;
+      timeLeft = seconds;
+      [60, 120, 180].forEach(sec => {
+        const btn = document.getElementById(`limitBtn-${sec}`);
+        if (sec === seconds) {
+          btn.className = "px-2 py-0.5 rounded text-xs font-medium bg-emerald-600 text-white transition";
+        } else {
+          btn.className = "px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition";
+        }
+      });
+      updateTimerUI();
+    }
+
+    function formatTime(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, "0");
+      const s = String(sec % 60).padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    function updateTimerUI() {
+      const timerEl = document.getElementById("timerDisplay");
+      const progressEl = document.getElementById("timerProgressBar");
+      timerEl.textContent = formatTime(timeLeft);
+
+      const percent = ((customTimeLimit - timeLeft) / customTimeLimit) * 100;
+      progressEl.style.width = `${Math.min(100, percent)}%`;
+
+      if (interviewStatus === "recording" && timeLeft <= 30) {
+        timerEl.className = "text-5xl sm:text-6xl font-mono font-extrabold tracking-wider text-red-500 animate-pulse";
+        progressEl.className = "h-full bg-red-500 transition-all duration-300";
+      } else {
+        timerEl.className = "text-5xl sm:text-6xl font-mono font-extrabold tracking-wider text-white";
+        progressEl.className = "h-full bg-emerald-500 transition-all duration-300";
+      }
+    }
+
+    // --- 면접 시작 (녹화 & 카운트다운 작동) ---
+    async function startInterview() {
+      if (!mediaStream) {
+        await initMediaStream();
+        if (!mediaStream) return;
+      }
+
+      videoChunks = [];
+      audioChunks = [];
+      recordedAudioBlob = null;
+      document.getElementById("transcriptInput").value = "";
+      document.getElementById("analysisResultContainer").classList.add("hidden");
+      document.getElementById("analysisErrorBox").classList.add("hidden");
+
+      timeLeft = customTimeLimit;
+      interviewStatus = "recording";
+      updateTimerUI();
+
+      // 비디오 녹화
+      try {
+        videoRecorder = new MediaRecorder(mediaStream);
+        videoRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) videoChunks.push(e.data); };
+        videoRecorder.onstop = () => {
+          const blob = new Blob(videoChunks, { type: "video/webm" });
+          const url = URL.createObjectURL(blob);
+          const playbackVideo = document.getElementById("playbackVideo");
+          playbackVideo.src = url;
+          playbackVideo.classList.remove("hidden");
+          document.getElementById("liveVideo").classList.add("hidden");
+        };
+        videoRecorder.start(250);
+
+        // 오디오 단독 녹음 (API 분석 전송용)
+        const audioTracks = mediaStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          const audioOnlyStream = new MediaStream([audioTracks[0]]);
+          audioRecorder = new MediaRecorder(audioOnlyStream);
+          audioRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+          audioRecorder.onstop = () => {
+            recordedAudioBlob = new Blob(audioChunks, { type: audioRecorder.mimeType || "audio/webm" });
+          };
+          audioRecorder.start(250);
+        }
+      } catch (e) {
+        console.error("녹화 시작 오류:", e);
+      }
+
+      if (speechRecognition) {
+        try { speechRecognition.start(); } catch (e) {}
+      }
+
+      // UI 전환
+      document.getElementById("startInterviewBtn").classList.add("hidden");
+      document.getElementById("stopInterviewBtn").classList.remove("hidden");
+      document.getElementById("stopInterviewBtn").classList.add("flex");
+      document.getElementById("sttActiveIndicator").classList.remove("hidden");
+      document.getElementById("recordingStatusBadge").innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+        <span class="text-red-300 font-bold">REC 답변 녹화/녹음 중</span>
+      `;
+      document.getElementById("timerSubText").textContent = "카메라 렌즈를 바라보며 차분하고 논리적으로 답변해 보세요.";
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimerUI();
+        if (timeLeft <= 0) {
+          stopInterview();
+        }
+      }, 1000);
+    }
+
+    // --- 면접 종료 ---
+    function stopInterview() {
+      if (timerInterval) clearInterval(timerInterval);
+      interviewStatus = "completed";
+
+      if (videoRecorder && videoRecorder.state !== "inactive") videoRecorder.stop();
+      if (audioRecorder && audioRecorder.state !== "inactive") audioRecorder.stop();
+      if (speechRecognition) {
+        try { speechRecognition.stop(); } catch (e) {}
+      }
+
+      document.getElementById("stopInterviewBtn").classList.add("hidden");
+      document.getElementById("stopInterviewBtn").classList.remove("flex");
+      document.getElementById("analyzeBtn").classList.remove("hidden");
+      document.getElementById("analyzeBtn").classList.add("flex");
+      document.getElementById("resetInterviewBtn").classList.remove("hidden");
+      document.getElementById("resetInterviewBtn").classList.add("flex");
+      document.getElementById("sttActiveIndicator").classList.add("hidden");
+
+      const usedSec = customTimeLimit - timeLeft;
+      document.getElementById("timerSubText").textContent = `총 ${usedSec}초 동안 답변을 완료했습니다. AI 분석 리포트를 생성해 보세요!`;
+      document.getElementById("recordingStatusBadge").innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="text-emerald-300 font-bold">녹화 완료 (화면에서 재생 가능)</span>
+      `;
+    }
+
+    // --- 면접 초기화 ---
+    function resetInterview() {
+      if (timerInterval) clearInterval(timerInterval);
+      interviewStatus = "idle";
+      timeLeft = customTimeLimit;
+      updateTimerUI();
+
+      const playbackVideo = document.getElementById("playbackVideo");
+      playbackVideo.pause();
+      playbackVideo.classList.add("hidden");
+      if (mediaStream) {
+        document.getElementById("liveVideo").classList.remove("hidden");
+      }
+
+      document.getElementById("startInterviewBtn").classList.remove("hidden");
+      document.getElementById("stopInterviewBtn").classList.add("hidden");
+      document.getElementById("analyzeBtn").classList.add("hidden");
+      document.getElementById("resetInterviewBtn").classList.add("hidden");
+      document.getElementById("analysisResultContainer").classList.add("hidden");
+      document.getElementById("analysisErrorBox").classList.add("hidden");
+      document.getElementById("transcriptInput").value = "";
+      document.getElementById("timerSubText").textContent = "질문 시작 버튼을 누르면 카운트다운과 녹화가 동시에 시작됩니다.";
+      document.getElementById("recordingStatusBadge").innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span>카메라 · 마이크 준비됨</span>
+      `;
+      updateCurrentQuestionDisplay();
+    }
+
+    // --- Gemini API 분석 호출 ---
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function fetchWithBackoff(url, options, retries = 4) {
+      let delay = 1000;
+      for (let i = 0; i < retries; i++) {
+        try {
+          const res = await fetch(url, options);
+          if (res.ok) return await res.json();
+          if (res.status !== 429 && res.status < 500) {
+            const errTxt = await res.text();
+            throw new Error(`API 응답 오류 (${res.status}): ${errTxt}`);
+          }
+        } catch (err) {
+          if (i === retries - 1) throw err;
+        }
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2;
+      }
+    }
+
+    async function analyzeWithGemini() {
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const analyzeBtnText = document.getElementById("analyzeBtnText");
+      const errorBox = document.getElementById("analysisErrorBox");
+
+      errorBox.classList.add("hidden");
+      analyzeBtn.disabled = true;
+      analyzeBtnText.textContent = "AI 입학사정관 분석 중...";
+
+      const currentQ = filteredQuestions[currentQuestionIndex];
+      const usedSec = customTimeLimit - timeLeft;
+      const transcriptText = document.getElementById("transcriptInput").value.trim();
+
+      const savedKey = localStorage.getItem("WOOSHIN_GEMINI_API_KEY") || DEFAULT_USER_API_KEY || "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${savedKey.trim()}`;
+
+      try {
+        const parts = [];
+        parts.push({
+          text: `당신은 대한민국 대학 입학사정관이자 우신고등학교 진로진학 전문 면접 코치입니다.
+우신고등학교 ${currentStudentName} 학생이 본인의 생활기록부 기반 면접 질문에 답변했습니다.
+
+- 학생 이름: ${currentStudentName}
+- 질문 영역: ${currentQ.category}
+- 면접 질문: "${currentQ.text}"
+- 답변 소요 시간: ${usedSec}초 (제한시간 ${customTimeLimit}초)
+- 음성 인식(STT) 또는 입력된 답변 텍스트: "${transcriptText || '(첨부된 음성 파일을 직접 듣고 전사 및 평가해 주세요)'}"
+
+제공된 음성 및 텍스트를 바탕으로 학생의 답변 논리성, 생기부 활동의 진위 및 구체성, 목소리 전달력, 보완점, 모범 답변, 그리고 면접관이 이어서 물어볼 날카로운 압박 꼬리질문 2가지를 JSON 형식으로 한국어로 작성해 주세요.`
+        });
+
+        if (recordedAudioBlob && recordedAudioBlob.size > 0) {
+          const b64Audio = await blobToBase64(recordedAudioBlob);
+          const mime = (recordedAudioBlob.type || "audio/webm").split(";")[0];
+          parts.push({
+            inlineData: { mimeType: mime, data: b64Audio }
+          });
+        }
+
+        const payload = {
+          contents: [{ role: "user", parts }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                transcription: { type: "STRING" },
+                overallScore: { type: "INTEGER" },
+                logicScore: { type: "INTEGER" },
+                deliveryScore: { type: "INTEGER" },
+                suitabilityScore: { type: "INTEGER" },
+                voiceAndPacingFeedback: { type: "STRING" },
+                strengths: { type: "ARRAY", items: { type: "STRING" } },
+                improvements: { type: "ARRAY", items: { type: "STRING" } },
+                modelAnswer: { type: "STRING" },
+                followUpQuestions: { type: "ARRAY", items: { type: "STRING" } }
+              },
+              propertyOrdering: [
+                "transcription", "overallScore", "logicScore", "deliveryScore",
+                "suitabilityScore", "voiceAndPacingFeedback", "strengths",
+                "improvements", "modelAnswer", "followUpQuestions"
+              ]
+            }
+          }
+        };
+
+        const data = await fetchWithBackoff(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawJson) throw new Error("분석 결과 텍스트가 비어 있습니다.");
+
+        const result = JSON.parse(rawJson);
+        displayAnalysisResult(result);
+
+        // 기록 저장
+        interviewHistory.unshift({
+          id: Date.now(),
+          student: currentStudentName,
+          category: currentQ.category,
+          question: currentQ.text,
+          duration: usedSec,
+          date: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
+          result
+        });
+        renderHistoryList();
+      } catch (err) {
+        console.error("AI 분석 에러:", err);
+        errorBox.textContent = "AI 분석 중 오류가 발생했습니다. 우측 상단 [API 연결됨] 버튼을 눌러 Google AI Studio에서 발급받은 유효한 Gemini API 키(보통 AIzaSy...로 시작)가 입력되어 있는지 확인해 주세요.";
+        errorBox.classList.remove("hidden");
+      } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtnText.textContent = "AI 면접 분석 리포트 다시 생성";
+      }
+    }
+
+    function displayAnalysisResult(res) {
+      document.getElementById("resOverallScore").textContent = res.overallScore ?? 85;
+      document.getElementById("resLogicScore").textContent = `${res.logicScore ?? 85}점`;
+      document.getElementById("resDeliveryScore").textContent = `${res.deliveryScore ?? 85}점`;
+      document.getElementById("resSuitabilityScore").textContent = `${res.suitabilityScore ?? 85}점`;
+      document.getElementById("resVoiceFeedback").textContent = res.voiceAndPacingFeedback || "";
+      document.getElementById("resModelAnswer").textContent = res.modelAnswer || "";
+
+      document.getElementById("resStrengthsList").innerHTML = (res.strengths || []).map(s => 
+        `<li class="flex items-start gap-2"><span class="text-emerald-400">•</span><span>${s}</span></li>`
+      ).join("");
+
+      document.getElementById("resImprovementsList").innerHTML = (res.improvements || []).map(i => 
+        `<li class="flex items-start gap-2"><span class="text-amber-400">•</span><span>${i}</span></li>`
+      ).join("");
+
+      document.getElementById("resFollowUpList").innerHTML = (res.followUpQuestions || []).map((q, idx) => 
+        `<li class="bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">Q${idx + 1}. ${q}</li>`
+      ).join("");
+
+      document.getElementById("analysisResultContainer").classList.remove("hidden");
+    }
+
+    function renderHistoryList() {
+      document.getElementById("historyCountBadge").textContent = interviewHistory.length;
+      const emptyEl = document.getElementById("historyEmptyState");
+      const listEl = document.getElementById("historyListContainer");
+
+      if (interviewHistory.length === 0) {
+        emptyEl.classList.remove("hidden");
+        listEl.innerHTML = "";
+        return;
+      }
+
+      emptyEl.classList.add("hidden");
+      listEl.innerHTML = interviewHistory.map(item => `
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-500 text-slate-950">${item.student}</span>
+                <span class="text-xs font-semibold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">${item.category}</span>
+                <span class="text-xs text-slate-500">${item.date} · ${item.duration}초 답변</span>
+              </div>
+              <h3 class="text-base font-bold text-white">${item.question}</h3>
             </div>
-            <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
-              <p>
-                이곳에 발급받은 <strong>Google AI Studio (Gemini) API 키</strong>를 입력하면 현재 브라우저에만 안전하게 저장되어 작동합니다.
-              </p>
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200">
-                💡 <strong>무료 한도까지만 사용하는 팁:</strong> Google AI Studio에서 키를 발급받을 때 <strong>결제 계정(카드)을 연결하지 않은 기본(Free) 상태</strong>로 두시면, 무료 제공량 초과 시 자동으로 호출만 멈추고 요금이 절대 과금되지 않습니다.
-              </div>
+            <div class="text-2xl font-extrabold text-emerald-400 shrink-0">${item.result.overallScore}점</div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+              <div class="font-bold text-slate-400 mb-1">내 답변 요약</div>
+              <p class="text-slate-300 leading-relaxed">${item.result.transcription || "(음성 분석 완료)"}</p>
             </div>
-            <form onSubmit={handleSaveApiKey} className="space-y-3">
-              <div className="relative">
-                <input
-                  type={showKeyText ? 'text' : 'password'}
-                  value={userApiKey}
-                  onChange={(e) => setUserApiKey(e.target.value)}
-                  placeholder="AIzaSy... 로 시작하는 API 키 입력 (비워두면 기본 환경 사용)"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKeyText(!showKeyText)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
-                >
-                  {showKeyText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUserApiKey('');
-                    localStorage.removeItem('WOOSHIN_GEMINI_API_KEY');
-                  }}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300"
-                >
-                  초기화
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white flex items-center gap-1.5"
-                >
-                  {keySavedToast ? <Check className="w-4 h-4" /> : null}
-                  <span>{keySavedToast ? '저장 완료!' : '브라우저에 안전하게 저장'}</span>
-                </button>
-              </div>
-            </form>
+            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+              <div class="font-bold text-emerald-400 mb-1">AI 추천 모범 답변</div>
+              <p class="text-slate-300 leading-relaxed">${item.result.modelAnswer}</p>
+            </div>
           </div>
         </div>
-      )}
+      `).join("");
+    }
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* ==================== 1. 실전 면접 탭 ==================== */}
-        {activeTab === 'interview' && (
-          <div className="space-y-6">
-            {/* 질문 제시 카드 (우신고 그린 테마) */}
-            <div className="bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    질문 {currentIdx + 1} / {questions.length}
-                  </span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300">
-                    {currentQuestion.category}
-                  </span>
-                </div>
+    // --- 탭 전환 ---
+    function switchTab(tabName) {
+      ["interview", "students", "history"].forEach(t => {
+        const sec = document.getElementById(`tab-${t}`);
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (t === tabName) {
+          sec.classList.remove("hidden");
+          btn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 bg-emerald-600 text-white shadow-sm";
+        } else {
+          sec.classList.add("hidden");
+          btn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-slate-200";
+        }
+      });
+    }
 
-                {/* 이전/다음 질문 이동 및 파일 빠른 업로드 */}
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 border border-slate-700 transition">
-                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>질문 파일 불러오기</span>
-                    <input
-                      type="file"
-                      accept=".txt,.csv,.json"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    onClick={() => {
-                      setCurrentIdx((prev) => Math.max(0, prev - 1));
-                      handleResetInterview();
-                    }}
-                    disabled={currentIdx === 0 || status === 'recording'}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition"
-                    title="이전 질문"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1));
-                      handleResetInterview();
-                    }}
-                    disabled={currentIdx === questions.length - 1 || status === 'recording'}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition"
-                    title="다음 질문"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+    // --- API 키 모달 관리 ---
+    function loadSavedApiKey() {
+      const saved = localStorage.getItem("WOOSHIN_GEMINI_API_KEY") || DEFAULT_USER_API_KEY;
+      document.getElementById("apiKeyInput").value = saved;
+    }
 
-              {/* 질문 본문 */}
-              <h2 className="text-xl sm:text-2xl font-bold text-white leading-relaxed">
-                Q. {currentQuestion.text}
-              </h2>
-            </div>
+    function openApiModal() {
+      const modal = document.getElementById("apiModal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
 
-            {/* 메인 그리드: 좌측(카메라 및 컨트롤) / 우측(타이머 및 AI 분석) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* 좌측: 카메라 & 녹화 영역 (7칸) */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl relative aspect-video flex items-center justify-center">
-                  {/* 권한 안내 메시지 */}
-                  {!hasPermission && (
-                    <div className="p-8 text-center max-w-md">
-                      <ShieldAlert className="w-12 h-12 text-amber-400 mx-auto mb-3" />
-                      <h3 className="text-base font-semibold text-white mb-2">카메라 및 마이크 연결 필요</h3>
-                      <p className="text-sm text-slate-400 mb-4">
-                        {permissionError || '실전 면접 연습을 위해 카메라와 마이크 권한을 허용해 주세요.'}
-                      </p>
-                      <button
-                        onClick={initMedia}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition"
-                      >
-                        장치 다시 연결하기
-                      </button>
-                    </div>
-                  )}
+    function closeApiModal() {
+      const modal = document.getElementById("apiModal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
 
-                  {/* 라이브 웹캠 화면 */}
-                  <video
-                    ref={liveVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover transform scale-x-[-1] ${
-                      status === 'completed' && recordedVideoUrl ? 'hidden' : 'block'
-                    } ${!hasPermission ? 'hidden' : ''}`}
-                  />
+    function toggleApiKeyVisibility() {
+      const input = document.getElementById("apiKeyInput");
+      input.type = input.type === "password" ? "text" : "password";
+    }
 
-                  {/* 녹화 완료 후 재생 화면 */}
-                  {status === 'completed' && recordedVideoUrl && (
-                    <video
-                      ref={playbackVideoRef}
-                      src={recordedVideoUrl}
-                      controls
-                      className="w-full h-full object-contain bg-black"
-                    />
-                  )}
+    function resetDefaultApiKey() {
+      document.getElementById("apiKeyInput").value = DEFAULT_USER_API_KEY;
+      localStorage.setItem("WOOSHIN_GEMINI_API_KEY", DEFAULT_USER_API_KEY);
+    }
 
-                  {/* 상단 상태 배지 */}
-                  {hasPermission && (
-                    <div className="absolute top-4 left-4 flex items-center gap-2">
-                      {status === 'recording' ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600/90 text-white text-xs font-bold shadow-lg animate-pulse">
-                          <span className="w-2.5 h-2.5 rounded-full bg-white" />
-                          <span>REC 답변 녹화/녹음 중</span>
-                        </div>
-                      ) : status === 'completed' ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-600/90 text-white text-xs font-bold shadow-lg">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          <span>녹화 완료 (재생 가능)</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md text-slate-200 text-xs font-medium border border-slate-700">
-                          <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                          <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>카메라 · 마이크 대기 중</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 우측 하단 우신고 워터마크 */}
-                  <div className="absolute bottom-3 right-3 pointer-events-none flex items-center gap-1.5 bg-slate-950/60 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
-                    <div className="w-4 h-4 bg-white rounded-sm p-0.5 flex items-center justify-center">
-                      <WooshinLogo className="w-full h-full" />
-                    </div>
-                    <span className="text-[11px] font-semibold text-white/80">우신고등학교</span>
-                  </div>
-
-                  {/* 시선 가이드 오버레이 (녹화 중이거나 대기 중일 때) */}
-                  {hasPermission && status !== 'completed' && (
-                    <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-white/10 m-6 rounded-xl flex flex-col justify-between p-3">
-                      <div className="text-[11px] text-white/40 text-center">
-                        카메라 렌즈를 정면으로 응시하며 밝은 표정으로 답변해 보세요
-                      </div>
-                      <div className="w-32 h-40 border border-white/15 rounded-full mx-auto my-auto" />
-                      <div />
-                    </div>
-                  )}
-                </div>
-
-                {/* 실시간 음성 인식(STT) 및 답변 메모 박스 */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                      <Volume2 className="w-4 h-4 text-emerald-400" />
-                      <span>음성 답변 실시간 인식 (직접 수정/보완 가능)</span>
-                    </label>
-                    {status === 'recording' && (
-                      <span className="text-xs text-emerald-400 animate-pulse">음성을 듣고 있습니다...</span>
-                    )}
-                  </div>
-                  <textarea
-                    value={transcript}
-                    onChange={(e) => setTranscript(e.target.value)}
-                    placeholder={
-                      status === 'recording'
-                        ? '마이크에 대고 답변을 말씀하시면 자동으로 텍스트가 기록됩니다. (음성 파일도 함께 녹음되어 AI에게 전달됩니다)'
-                        : '질문 시작 버튼을 누르고 답변을 시작하세요. 답변 후 텍스트를 직접 다듬거나 추가할 수도 있습니다.'
-                    }
-                    rows={3}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition resize-none"
-                  />
-                </div>
-              </div>
-
-              {/* 우측: 3분 카운트다운 & 컨트롤 & AI 분석 결과 (5칸) */}
-              <div className="lg:col-span-5 space-y-6">
-                {/* 3분 카운트다운 및 제어 패널 */}
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-emerald-400" />
-                      <span>답변 제한 시간 카운트다운</span>
-                    </span>
-                    {/* 시간 설정 (1분 / 2분 / 3분) */}
-                    {status === 'idle' && (
-                      <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                        {[60, 120, 180].map((sec) => (
-                          <button
-                            key={sec}
-                            onClick={() => {
-                              setCustomTimeLimit(sec);
-                              setTimeLeft(sec);
-                            }}
-                            className={`px-2 py-0.5 rounded text-xs font-medium transition ${
-                              customTimeLimit === sec
-                                ? 'bg-emerald-600 text-white'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            {sec / 60}분
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 대형 타이머 디스플레이 */}
-                  <div className="text-center py-4 bg-slate-950 rounded-2xl border border-slate-800/80 mb-4 relative overflow-hidden">
-                    <div
-                      className={`text-5xl sm:text-6xl font-mono font-extrabold tracking-wider transition-colors ${
-                        timeLeft <= 30 && status === 'recording'
-                          ? 'text-red-500 animate-pulse'
-                          : timeLeft <= 60 && status === 'recording'
-                          ? 'text-amber-400'
-                          : 'text-white'
-                      }`}
-                    >
-                      {formatTime(timeLeft)}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-2">
-                      {status === 'idle' && '질문 시작 버튼을 누르면 카운트다운과 녹화가 시작됩니다.'}
-                      {status === 'recording' && (timeLeft <= 30 ? '마무리할 시간입니다! 핵심 결론을 말씀하세요.' : '차분하고 명확한 목소리로 답변을 이어가세요.')}
-                      {status === 'completed' && `총 ${customTimeLimit - timeLeft}초 동안 답변하셨습니다.`}
-                      {status === 'analyzing' && 'AI 입학사정관이 음성과 답변 내용을 정밀 분석 중입니다...'}
-                    </p>
-
-                    {/* 하단 진행 바 */}
-                    <div className="w-full bg-slate-800 h-1.5 mt-4">
-                      <div
-                        className={`h-full transition-all duration-500 ${
-                          timeLeft <= 30 ? 'bg-red-500' : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${Math.min(100, progressPercent)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* 액션 버튼 그룹 */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {status === 'idle' && (
-                      <button
-                        onClick={handleStartInterview}
-                        className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-base shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition transform active:scale-[0.99]"
-                      >
-                        <Play className="w-5 h-5 fill-current" />
-                        <span>질문 시작 (녹화 및 3분 타이머 작동)</span>
-                      </button>
-                    )}
-
-                    {status === 'recording' && (
-                      <button
-                        onClick={handleStopInterview}
-                        className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-base shadow-lg shadow-red-600/25 flex items-center justify-center gap-2 transition"
-                      >
-                        <Square className="w-5 h-5 fill-current" />
-                        <span>답변 완료 (녹화 종료)</span>
-                      </button>
-                    )}
-
-                    {(status === 'completed' || status === 'analyzing') && (
-                      <>
-                        <button
-                          onClick={handleAnalyzeResponse}
-                          disabled={status === 'analyzing'}
-                          className="flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition"
-                        >
-                          {status === 'analyzing' ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>AI 분석 진행 중...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4" />
-                              <span>AI 면접 분석 리포트 생성</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={handleResetInterview}
-                          disabled={status === 'analyzing'}
-                          className="py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-sm flex items-center justify-center gap-1.5 border border-slate-700 transition"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                          <span>다시 도전</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-
-                  {analysisError && (
-                    <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{analysisError}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* AI 분석 결과 요약 카드 (분석 완료 시 표시) */}
-                {analysisResult && (
-                  <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-xl space-y-5 animate-fadeIn">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                      <div>
-                        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
-                          우신고 AI 입학사정관 평가
-                        </span>
-                        <h3 className="text-lg font-bold text-white mt-0.5">답변 종합 분석 리포트</h3>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-3xl font-extrabold text-emerald-400">
-                          {analysisResult.overallScore}
-                          <span className="text-sm font-normal text-slate-400"> / 100점</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 세부 점수 바 */}
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 mb-1">논리성/이해도</div>
-                        <div className="text-lg font-bold text-emerald-400">{analysisResult.logicScore}점</div>
-                      </div>
-                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 mb-1">전달력/음성</div>
-                        <div className="text-lg font-bold text-teal-400">{analysisResult.deliveryScore}점</div>
-                      </div>
-                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <div className="text-xs text-slate-400 mb-1">전공/적합성</div>
-                        <div className="text-lg font-bold text-cyan-400">{analysisResult.suitabilityScore}점</div>
-                      </div>
-                    </div>
-
-                    {/* 음성 및 태도 피드백 */}
-                    <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-3.5">
-                      <h4 className="text-xs font-bold text-emerald-300 mb-1 flex items-center gap-1.5">
-                        <Volume2 className="w-3.5 h-3.5" />
-                        음성 전달력 및 시간 배분 코칭
-                      </h4>
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        {analysisResult.voiceAndPacingFeedback}
-                      </p>
-                    </div>
-
-                    {/* 강점 및 보완점 */}
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-emerald-400 mb-1.5">👍 좋았던 점 (강점)</h4>
-                        <ul className="space-y-1">
-                          {analysisResult.strengths?.map((item, idx) => (
-                            <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
-                              <span className="text-emerald-400">•</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-amber-400 mb-1.5">💡 보완할 점 (개선 포인트)</h4>
-                        <ul className="space-y-1">
-                          {analysisResult.improvements?.map((item, idx) => (
-                            <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
-                              <span className="text-amber-400">•</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    {/* 추천 모범 답변 */}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                      <h4 className="text-xs font-bold text-emerald-400 mb-1.5">✨ AI 추천 모범 답변 가이드</h4>
-                      <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
-                        {analysisResult.modelAnswer}
-                      </p>
-                    </div>
-
-                    {/* 예상 추가 꼬리질문 */}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                      <h4 className="text-xs font-bold text-rose-400 mb-2">🔥 대비해야 할 예상 꼬리질문</h4>
-                      <ul className="space-y-1.5">
-                        {analysisResult.followUpQuestions?.map((q, idx) => (
-                          <li key={idx} className="text-xs text-slate-200 bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
-                            Q{idx + 1}. {q}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 2. 질문 목록 관리 및 파일 업로드 탭 ==================== */}
-        {activeTab === 'questions' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            {/* 파일 업로드 배너 */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-emerald-400" />
-                    <span>우신고등학교 면접 질문 파일 업로드</span>
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1">
-                    텍스트(.txt), 엑셀 CSV(.csv), 또는 JSON(.json) 파일을 업로드하면 질문 목록이 자동으로 등록됩니다.
-                    (한 줄에 질문 하나씩 작성된 파일 권장)
-                  </p>
-                </div>
-                <label className="cursor-pointer shrink-0 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition">
-                  <Upload className="w-4 h-4" />
-                  <span>파일 선택하여 불러오기</span>
-                  <input
-                    type="file"
-                    accept=".txt,.csv,.json"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            </div>
-
-            {/* 직접 질문 추가 폼 */}
-            <form onSubmit={handleAddQuestion} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-200">새로운 면접 질문 직접 추가</h3>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  value={newQuestionCategory}
-                  onChange={(e) => setNewQuestionCategory(e.target.value)}
-                  placeholder="카테고리 (예: 전공적합성)"
-                  className="sm:w-40 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="text"
-                  value={newQuestionText}
-                  onChange={(e) => setNewQuestionText(e.target.value)}
-                  placeholder="면접 질문을 입력해 주세요..."
-                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5 border border-slate-700 transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>추가</span>
-                </button>
-              </div>
-            </form>
-
-            {/* 등록된 질문 리스트 */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-slate-200">현재 등록된 면접 질문 ({questions.length}개)</h3>
-              </div>
-              <div className="space-y-2.5">
-                {questions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    className={`p-4 rounded-xl border transition flex items-start justify-between gap-4 ${
-                      idx === currentIdx
-                        ? 'bg-emerald-950/30 border-emerald-500/40'
-                        : 'bg-slate-950 border-slate-800/80 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-emerald-400">질문 {idx + 1}</span>
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                          {q.category}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-200 leading-relaxed">{q.text}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => {
-                          setCurrentIdx(idx);
-                          handleResetInterview();
-                          setActiveTab('interview');
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-medium transition"
-                      >
-                        연습하기
-                      </button>
-                      <button
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        disabled={questions.length <= 1}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-800 disabled:opacity-30 transition"
-                        title="질문 삭제"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ==================== 3. 분석 기록 탭 ==================== */}
-        {activeTab === 'history' && (
-          <div className="max-w-4xl mx-auto space-y-4">
-            {history.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
-                <Award className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-slate-300 mb-1">아직 분석된 면접 기록이 없습니다</h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  실전 면접 탭에서 질문에 답변하고 AI 분석 리포트를 생성하면 이곳에 기록이 저장됩니다.
-                </p>
-                <button
-                  onClick={() => setActiveTab('interview')}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
-                >
-                  면접 시작하러 가기
-                </button>
-              </div>
-            ) : (
-              history.map((item) => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                  <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                          {item.category}
-                        </span>
-                        <span className="text-xs text-slate-500">{item.date} · {item.duration}초 답변</span>
-                      </div>
-                      <h3 className="text-base font-bold text-white">Q. {item.question}</h3>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-2xl font-extrabold text-emerald-400">{item.result.overallScore}점</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                      <div className="font-bold text-slate-400 mb-1">내 답변 요약 / 전사</div>
-                      <p className="text-slate-300 leading-relaxed">{item.result.transcription}</p>
-                    </div>
-                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                      <div className="font-bold text-emerald-400 mb-1">AI 추천 모범 답변</div>
-                      <p className="text-slate-300 leading-relaxed">{item.result.modelAnswer}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* ==================== 4. GitHub 배포 및 API 가이드 탭 ==================== */}
-        {activeTab === 'api-guide' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                  <Github className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">만들어둔 GitHub 저장소에 1분 만에 올리는 방법</h2>
-                  <p className="text-xs text-slate-400">
-                    복잡한 명령어나 프로그램 설치 없이 GitHub 웹사이트에서 바로 배포할 수 있습니다.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
-                <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-4 space-y-2">
-                  <h3 className="font-bold text-emerald-300">STEP 1. GitHub 저장소에 파일 업로드하기</h3>
-                  <ol className="list-decimal list-inside text-xs text-slate-200 space-y-1.5">
-                    <li>만들어 두신 <strong>GitHub 저장소(Repository)</strong> 페이지로 이동합니다.</li>
-                    <li>화면 가운데 또는 우측 상단의 <strong>Add file</strong> 버튼 → <strong>Create new file</strong> (또는 <strong>Upload files</strong>)을 클릭합니다.</li>
-                    <li>우측 코드 에디터의 전체 코드를 복사하여 붙여넣거나 파일을 업로드한 뒤, 하단의 초록색 <strong>Commit changes</strong> 버튼을 누릅니다.</li>
-                  </ol>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                  <h3 className="font-bold text-emerald-400">STEP 2. 무료 웹사이트(GitHub Pages) 주소 켜기</h3>
-                  <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5">
-                    <li>저장소 상단 메뉴 제일 오른쪽에 있는 <strong>⚙️ Settings(설정)</strong> 탭을 클릭합니다.</li>
-                    <li>왼쪽 메뉴바에서 <strong>Pages</strong> 메뉴를 찾아 클릭합니다.</li>
-                    <li><strong>Build and deployment</strong> 아래의 <strong>Branch</strong> 항목에서 <code>None</code>을 눌러 <strong><code>main</code></strong> (또는 <code>master</code>)으로 바꾸고 옆의 <strong>Save</strong> 버튼을 누릅니다.</li>
-                    <li>약 1~2분 뒤 페이지를 새로고침하면 상단에 <code>https://내아이디.github.io/저장소이름/</code> 형태의 <strong>우리 학교 전용 면접 사이트 주소</strong>가 생성됩니다!</li>
-                  </ol>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                  <h3 className="font-bold text-amber-400">💡 더 쉬운 팁: GitHub Pages에서는 단일 HTML 파일이 가장 편합니다!</h3>
-                  <p className="text-xs text-slate-300">
-                    현재 화면은 React(<code>.jsx</code>) 기반입니다. 만약 GitHub 저장소에 파일 딱 <strong>1개(<code>index.html</code>)만 올려서 별도 빌드 설정 없이 즉시 사이트가 열리게</strong> 만들고 싶으시다면 채팅창에 <strong>"GitHub에 바로 올릴 수 있게 단일 index.html로 변환해줘"</strong>라고 말씀해 주세요! 바로 파일 하나만 올리면 작동하도록 변환해 드립니다.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
+    function saveApiKey() {
+      const val = document.getElementById("apiKeyInput").value.trim();
+      localStorage.setItem("WOOSHIN_GEMINI_API_KEY", val);
+      closeApiModal();
+    }
+  </script>
+</body>
+</html>
