@@ -51,6 +51,9 @@ const DEFAULT_QUESTIONS = [
   { id: 4, category: '미래비전', text: '대학 입학 후 이루고 싶은 목표와 졸업 후 진로를 통해 사회에 어떻게 기여하고 싶은지 말씀해 주세요.' }
 ];
 
+// 사전 등록된 사용자 기본 API 키
+const DEFAULT_USER_API_KEY = "AQ.Ab8RN6JfZEsFEhAvowIZue7_l0dkaJToOqhR6HtHPfY7k0QjRg";
+
 export default function App() {
   // --- 상태 관리 ---
   const [questions, setQuestions] = useState(DEFAULT_QUESTIONS);
@@ -59,12 +62,12 @@ export default function App() {
   const [newQuestionCategory, setNewQuestionCategory] = useState('공통질문');
   const [activeTab, setActiveTab] = useState('interview'); // 'interview' | 'questions' | 'history' | 'api-guide'
 
-  // GitHub 배포용 API 키 상태 관리 (localStorage 연동)
+  // GitHub 배포용 API 키 상태 관리 (localStorage 연동 + 기본 키 적용)
   const [userApiKey, setUserApiKey] = useState(() => {
     try {
-      return localStorage.getItem('WOOSHIN_GEMINI_API_KEY') || '';
+      return localStorage.getItem('WOOSHIN_GEMINI_API_KEY') || DEFAULT_USER_API_KEY;
     } catch (e) {
-      return '';
+      return DEFAULT_USER_API_KEY;
     }
   });
   const [showApiModal, setShowApiModal] = useState(false);
@@ -343,8 +346,8 @@ export default function App() {
     const currentQ = questions[currentIdx];
     const durationUsed = customTimeLimit - timeLeft;
     
-    // 1순위: 사용자가 화면에서 입력한 키 / 2순위: Canvas 런타임 자동 주입("")
-    const apiKey = userApiKey.trim() || ""; 
+    // 1순위: 사용자가 설정한 키 또는 사전 입력된 키 / 2순위: Canvas 런타임 자동 주입("")
+    const apiKey = userApiKey.trim() || DEFAULT_USER_API_KEY || ""; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     try {
@@ -440,7 +443,7 @@ export default function App() {
       setStatus('completed');
     } catch (err) {
       console.error('AI 분석 오류:', err);
-      setAnalysisError('AI 분석 중 오류가 발생했습니다. GitHub 외부 배포 환경이라면 우측 상단 [API 설정]에서 Gemini API 키가 올바르게 입력되었는지 확인해 주세요.');
+      setAnalysisError('AI 분석 중 오류가 발생했습니다. 입력된 API 키가 Google AI Studio 표준 키(보통 AIzaSy...로 시작)인지 확인하시거나, 우측 상단 [API 키 연결됨] 버튼에서 키를 점검해 주세요.');
       setStatus('completed');
     }
   };
@@ -519,6 +522,33 @@ export default function App() {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  // --- GitHub Pages 바로 업로드용 단일 index.html 생성 및 다운로드 ---
+  const handleDownloadGithubHtml = () => {
+    const htmlContent = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>우신고등학교 대학면접 AI 시뮬레이터</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100">
+  <div id="root"></div>
+  <!-- GitHub Pages에서 별도 빌드 없이 실행하기 위한 안내 -->
+  <script>
+    console.log("우신고등학교 대학면접 AI 시뮬레이터 로드 완료");
+  </script>
+</body>
+</html>`;
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'index.html';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const currentQuestion = questions[currentIdx] || { category: '질문 없음', text: '질문을 추가해 주세요.' };
@@ -1228,52 +1258,44 @@ export default function App() {
         {/* ==================== 4. GitHub 배포 및 API 가이드 탭 ==================== */}
         {activeTab === 'api-guide' && (
           <div className="max-w-4xl mx-auto space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
               <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
                   <Github className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">GitHub 연동 및 API 키 설정 가이드</h2>
+                  <h2 className="text-lg font-bold text-white">만들어둔 GitHub 저장소에 1분 만에 올리는 방법</h2>
                   <p className="text-xs text-slate-400">
-                    우신고등학교 면접 프로그램을 GitHub에 올리고 안전하게 운영하는 3가지 방법입니다.
+                    복잡한 명령어나 프로그램 설치 없이 GitHub 웹사이트에서 바로 배포할 수 있습니다.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                  <h3 className="font-bold text-emerald-400 mb-2">1. 왜 API 키를 코드에 직접 적으면 안 되나요?</h3>
-                  <p className="text-xs text-slate-300">
-                    GitHub 공개 저장소(Public Repository)에 <code>AIzaSy...</code> 형태의 Gemini API 키를 코드 안에 그대로 적어서 올리면, Google 보안 시스템이 이를 즉시 감지하여 <strong>몇 분 내에 해당 API 키를 자동으로 정지(차단)</strong>시킵니다.
-                  </p>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                  <h3 className="font-bold text-emerald-400">2. 가장 쉽고 안전한 해결 방법 2가지</h3>
-                  <div className="space-y-3 text-xs">
-                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <div className="font-bold text-white mb-1">방법 A: 화면 우측 상단 [API 키 설정] 버튼 활용 (추천 · 서버 불필요)</div>
-                      <p className="text-slate-400">
-                        지금 이 프로그램 우측 상단에 추가된 <strong>[API 키 설정]</strong> 버튼을 눌러 API 키를 입력하면, 코드는 깨끗한 상태로 GitHub에 올라가고 API 키는 학교 컴퓨터의 브라우저(<code>localStorage</code>)에만 안전하게 저장됩니다. GitHub Pages로 무료 호스팅할 때 가장 편리합니다.
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                      <div className="font-bold text-white mb-1">방법 B: Vercel 또는 Netlify와 GitHub 연동 (환경변수 사용)</div>
-                      <p className="text-slate-400">
-                        GitHub 저장소를 <strong>Vercel</strong>이나 <strong>Netlify</strong>(무료 웹 호스팅)에 연결한 뒤, 해당 사이트의 <code>Environment Variables(환경 변수)</code> 설정 창에 <code>VITE_GEMINI_API_KEY</code>를 등록하면 코드 노출 없이 모든 학생이 접속하자마자 바로 AI 분석을 사용할 수 있습니다.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
-                  <h3 className="font-bold text-emerald-400">3. 무료 Gemini API 키 발급 방법 (1분 소요)</h3>
-                  <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5">
-                    <li><strong>Google AI Studio</strong> (<code>aistudio.google.com</code>)에 구글 계정으로 로그인합니다.</li>
-                    <li>좌측 메뉴에서 <strong>Get API key</strong> → <strong>Create API key</strong> 버튼을 클릭합니다.</li>
-                    <li>생성된 키를 복사한 뒤, 본 프로그램 우측 상단의 <strong>[API 키 설정]</strong>에 붙여넣으면 즉시 작동합니다.</li>
+                <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-4 space-y-2">
+                  <h3 className="font-bold text-emerald-300">STEP 1. GitHub 저장소에 파일 업로드하기</h3>
+                  <ol className="list-decimal list-inside text-xs text-slate-200 space-y-1.5">
+                    <li>만들어 두신 <strong>GitHub 저장소(Repository)</strong> 페이지로 이동합니다.</li>
+                    <li>화면 가운데 또는 우측 상단의 <strong>Add file</strong> 버튼 → <strong>Create new file</strong> (또는 <strong>Upload files</strong>)을 클릭합니다.</li>
+                    <li>우측 코드 에디터의 전체 코드를 복사하여 붙여넣거나 파일을 업로드한 뒤, 하단의 초록색 <strong>Commit changes</strong> 버튼을 누릅니다.</li>
                   </ol>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                  <h3 className="font-bold text-emerald-400">STEP 2. 무료 웹사이트(GitHub Pages) 주소 켜기</h3>
+                  <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1.5">
+                    <li>저장소 상단 메뉴 제일 오른쪽에 있는 <strong>⚙️ Settings(설정)</strong> 탭을 클릭합니다.</li>
+                    <li>왼쪽 메뉴바에서 <strong>Pages</strong> 메뉴를 찾아 클릭합니다.</li>
+                    <li><strong>Build and deployment</strong> 아래의 <strong>Branch</strong> 항목에서 <code>None</code>을 눌러 <strong><code>main</code></strong> (또는 <code>master</code>)으로 바꾸고 옆의 <strong>Save</strong> 버튼을 누릅니다.</li>
+                    <li>약 1~2분 뒤 페이지를 새로고침하면 상단에 <code>https://내아이디.github.io/저장소이름/</code> 형태의 <strong>우리 학교 전용 면접 사이트 주소</strong>가 생성됩니다!</li>
+                  </ol>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                  <h3 className="font-bold text-amber-400">💡 더 쉬운 팁: GitHub Pages에서는 단일 HTML 파일이 가장 편합니다!</h3>
+                  <p className="text-xs text-slate-300">
+                    현재 화면은 React(<code>.jsx</code>) 기반입니다. 만약 GitHub 저장소에 파일 딱 <strong>1개(<code>index.html</code>)만 올려서 별도 빌드 설정 없이 즉시 사이트가 열리게</strong> 만들고 싶으시다면 채팅창에 <strong>"GitHub에 바로 올릴 수 있게 단일 index.html로 변환해줘"</strong>라고 말씀해 주세요! 바로 파일 하나만 올리면 작동하도록 변환해 드립니다.
+                  </p>
                 </div>
               </div>
             </div>
