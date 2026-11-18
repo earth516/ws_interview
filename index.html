@@ -596,6 +596,7 @@
     let audioChunks = [];
     let recordedAudioBlob = null;
     let speechRecognition = null;
+    let accumulatedTranscript = ""; // 모바일에서 STT가 재시작되어도 이전 텍스트를 보존하기 위한 누적 변수
 
     let interviewHistory = [];
     let isInitialized = false;
@@ -1370,7 +1371,19 @@
       }
     }
 
-    // --- 음성 인식(STT) 초기화 ---
+    // 기기에 맞는 최적의 비디오/오디오 녹화 MIME 타입 선택 (안드로이드 WebM, iOS Safari MP4 호환)
+    function getSupportedMimeType(type = "audio") {
+      const candidates = type === "video"
+        ? ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
+        : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+      if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+      for (const mime of candidates) {
+        if (MediaRecorder.isTypeSupported(mime)) return mime;
+      }
+      return "";
+    }
+
+    // --- 음성 인식(STT) 초기화 (모바일 끊김 자동 재시작 및 누적 보존 적용) ---
     function initSpeechRecognition() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
@@ -1380,14 +1393,35 @@
       speechRecognition.interimResults = true;
 
       speechRecognition.onresult = (event) => {
-        let finalStr = "";
         let interimStr = "";
-        for (let i = 0; i < event.results.length; i++) {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
           const txt = event.results[i][0].transcript;
-          if (event.results[i].isFinal) finalStr += txt + " ";
-          else interimStr += txt;
+          if (event.results[i].isFinal) {
+            accumulatedTranscript += txt.trim() + " ";
+          } else {
+            interimStr += txt;
+          }
         }
-        document.getElementById("transcriptInput").value = (finalStr + interimStr).trim();
+        const inputEl = document.getElementById("transcriptInput");
+        if (inputEl) {
+          inputEl.value = (accumulatedTranscript + interimStr).trim();
+        }
+      };
+
+      // 모바일 브라우저에서 숨을 고를 때 STT가 저절로 끊기면 녹화 중일 때 즉시 재시작
+      speechRecognition.onend = () => {
+        if (interviewStatus === "recording") {
+          setTimeout(() => {
+            if (interviewStatus === "recording") {
+              try { speechRecognition.start(); } catch (e) {}
+            }
+          }, 150);
+        }
+      };
+
+      speechRecognition.onerror = (event) => {
+        // 모바일에서 일시적인 no-speech 에러 발생 시 무시하고 재연결 유지
+        console.warn("음성 인식 상태:", event.error);
       };
     }
 
@@ -1448,8 +1482,16 @@
       document.getElementById("analysisErrorBox").classList.add("hidden");
       document.getElementById("followUpActionPanel").classList.add("hidden");
       document.getElementById("transcriptInput").value = "";
+      accumulatedTranscript = "";
       timeLeft = customTimeLimit;
       updateTimerUI();
+
+      // 모바일 브라우저 정책상 사용자 버튼 터치 시점에 STT 워밍업 권한 확보
+      if (speechRecognition) {
+        try {
+          speechRecognition.abort();
+        } catch (e) {}
+      }
 
       // 1단계: 5초 준비 카운트다운 시작
       interviewStatus = "pre-countdown";
@@ -1576,14 +1618,19 @@
       videoChunks = [];
       audioChunks = [];
       recordedAudioBlob = null;
+      accumulatedTranscript = "";
 
       try {
-        videoRecorder = new MediaRecorder(mediaStream);
+        const vMime = getSupportedMimeType("video");
+        videoRecorder = vMime
+          ? new MediaRecorder(mediaStream, { mimeType: vMime })
+          : new MediaRecorder(mediaStream);
+
         videoRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) videoChunks.push(e.data);
         };
         videoRecorder.onstop = () => {
-          const blob = new Blob(videoChunks, { type: "video/webm" });
+          const blob = new Blob(videoChunks, { type: videoRecorder.mimeType || "video/mp4" });
           const url = URL.createObjectURL(blob);
           const playback = document.getElementById("playbackVideo");
           playback.src = url;
@@ -1595,27 +1642,39 @@
         const audioTracks = mediaStream.getAudioTracks();
         if (audioTracks.length > 0) {
           const aStream = new MediaStream([audioTracks[0]]);
-          const recorderOptions = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-            ? { mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 16000 }
-            : {};
+          const aMime = getSupportedMimeType("audio");
+          const recorderOptions = aMime
+            ? { mimeType: aMime, audioBitsPerSecond: 24000 }
+            : { audioBitsPerSecond: 24000 };
           audioRecorder = new MediaRecorder(aStream, recorderOptions);
           audioRecorder.ondataavailable = (e) => {
             if (e.data && e.data.size > 0) audioChunks.push(e.data);
           };
           audioRecorder.onstop = () => {
-            recordedAudioBlob = new Blob(audioChunks, { type: audioRecorder.mimeType || "audio/webm" });
+            recordedAudioBlob = new Blob(audioChunks, { type: audioRecorder.mimeType || "audio/mp4" });
           };
           audioRecorder.start(250);
-        }
-
-        if (speechRecognition) {
-          try { speechRecognition.start(); } catch (e) {}
-          document.getElementById("sttListeningIndicator").classList.remove("hidden");
         }
 
         interviewStatus = "recording";
         updateStatusUI();
         updateCurrentQuestionDisplay();
+
+        if (speechRecognition) {
+          try { speechRecognition.start(); } catch (e) {}
+          const ind = document.getElementById("sttListeningIndicator");
+          if (ind) {
+            ind.textContent = "마이크 음성 인식 및 녹음 중...";
+            ind.classList.remove("hidden");
+          }
+        } else {
+          // iOS 인앱 브라우저 등 실시간 STT 미지원 시 안내 표시 (녹음본으로 AI가 직접 음성 전사)
+          const ind = document.getElementById("sttListeningIndicator");
+          if (ind) {
+            ind.textContent = "모바일 음성 녹음 중 (분석 시 AI가 음성을 텍스트로 자동 변환합니다)";
+            ind.classList.remove("hidden");
+          }
+        }
 
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(() => {
@@ -1632,6 +1691,9 @@
     }
 
     function stopInterview() {
+      // 먼저 상태를 변경하여 모바일 STT 자동 재시작(onend)이 발동하지 않도록 처리
+      interviewStatus = "completed";
+
       if (preCountdownInterval) clearInterval(preCountdownInterval);
       if (postReadingCountdownInterval) clearInterval(postReadingCountdownInterval);
       if (timerInterval) clearInterval(timerInterval);
@@ -1644,7 +1706,6 @@
       }
       document.getElementById("sttListeningIndicator").classList.add("hidden");
 
-      interviewStatus = "completed";
       updateStatusUI();
       updateCurrentQuestionDisplay();
       updateFollowUpActionPanel();
@@ -1700,6 +1761,7 @@
         document.getElementById("liveVideo").classList.remove("hidden");
       }
       document.getElementById("transcriptInput").value = "";
+      accumulatedTranscript = "";
       document.getElementById("analysisResultContainer").classList.add("hidden");
       document.getElementById("analysisErrorBox").classList.add("hidden");
       document.getElementById("followUpActionPanel").classList.add("hidden");
@@ -1818,6 +1880,11 @@
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${savedKey.trim()}`;
 
       try {
+        // 모바일에서 녹화 종료 직후 오디오 Blob 생성이 완료될 때까지 짧게 대기
+        if (!recordedAudioBlob && audioChunks.length > 0) {
+          await new Promise(r => setTimeout(r, 250));
+        }
+
         const parts = [];
         parts.push({
           text: `대한민국 대학 입학사정관으로서 우신고 ${currentStudentName} 학생의 면접 답변을 평가하세요.
@@ -1825,14 +1892,16 @@
 - 영역: ${activeQ.category}
 - 질문: "${activeQ.text}"
 - 답변시간: ${usedSec}초 / 제한 ${customTimeLimit}초
-- 답변내용: "${transcriptText || '(제공된 음성을 바탕으로 요약 및 평가)'}"
+- 답변내용: "${transcriptText || '(첨부된 학생의 음성 녹음 파일을 직접 듣고, 학생이 말한 내용을 transcription 필드에 한국어로 정확히 받아적은 뒤 평가하세요)'}"
 각 항목을 명확하고 알기 쉽게 작성해 JSON으로 반환하세요.`
         });
 
-        const shouldSendAudio = transcriptText.length < 5 && recordedAudioBlob && recordedAudioBlob.size > 0;
+        // 모바일 환경 등에서 실시간 STT 텍스트가 짧거나 비어 있으면 녹음된 오디오를 Gemini에 직접 전송하여 음성 변환 + 분석 동시 수행!
+        const shouldSendAudio = transcriptText.length < 15 && recordedAudioBlob && recordedAudioBlob.size > 0;
         if (shouldSendAudio) {
           const b64Audio = await blobToBase64(recordedAudioBlob);
-          const mime = (recordedAudioBlob.type || "audio/webm").split(";")[0];
+          let mime = (recordedAudioBlob.type || "audio/mp4").split(";")[0];
+          if (!mime || mime === "audio/x-matroska") mime = "audio/webm";
           parts.push({
             inlineData: { mimeType: mime, data: b64Audio }
           });
@@ -1876,6 +1945,13 @@
         if (!rawJson) throw new Error("결과 파싱 실패");
 
         const result = JSON.parse(rawJson);
+
+        // 만약 모바일에서 실시간 STT가 비어 있었다면, Gemini가 음성에서 직접 받아적은 텍스트를 입력창에 자동으로 채워줌!
+        const inputEl = document.getElementById("transcriptInput");
+        if (inputEl && (!inputEl.value || inputEl.value.trim().length < 5) && result.transcription) {
+          inputEl.value = result.transcription;
+        }
+
         displayAnalysisResult(result);
 
         interviewHistory.unshift({
