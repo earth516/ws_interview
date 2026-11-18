@@ -101,24 +101,28 @@
       </div>
 
       <!-- 면접 대비 질문 연동 중 % 게이지바 로딩 영역 -->
-      <div id="gateLoadingSection" class="py-12 px-4 text-center space-y-4">
+      <div id="gateLoadingSection" class="py-10 px-4 text-center space-y-4">
         <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mb-1">
-          <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+          <!-- 외부 아이콘 스크립트 없이도 항상 돌아가는 순수 SVG 스피너 -->
+          <svg class="w-6 h-6 animate-spin text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
         </div>
         <div class="space-y-1">
           <div class="flex items-center justify-center gap-2">
             <span id="gateLoadingLabel" class="text-sm sm:text-base font-bold text-white">면접 대비 질문 연동 중...</span>
-            <span id="gateLoadingPercent" class="text-sm sm:text-base font-extrabold text-emerald-400 font-mono">0%</span>
+            <span id="gateLoadingPercent" class="text-sm sm:text-base font-extrabold text-emerald-400 font-mono">15%</span>
           </div>
           <p id="gateLoadingSub" class="text-xs text-slate-400">questions.txt 데이터를 불러와 학생별 핵심·꼬리질문을 구성하고 있습니다</p>
         </div>
         <!-- 게이지바 -->
         <div class="max-w-md mx-auto w-full bg-slate-950 border border-slate-800 rounded-full h-3.5 overflow-hidden p-0.5 shadow-inner">
-          <div id="gateLoadingBar" class="h-full bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-400 rounded-full transition-all duration-150" style="width: 0%"></div>
+          <div id="gateLoadingBar" class="h-full bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-400 rounded-full transition-all duration-150" style="width: 15%"></div>
         </div>
       </div>
 
-      <!-- 학생 선택 그리드 (로딩 100% 완료 후 표시) -->
+      <!-- 학생 선택 그리드 (초기부터 함께 렌더링하여 절대 멈추지 않도록 보장) -->
       <div id="gateStudentGrid" class="hidden grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5 max-h-[52vh] overflow-y-auto p-1"></div>
     </div>
   </div>
@@ -635,33 +639,62 @@
       filterGateStudents(document.getElementById("gateStudentSearch")?.value || "");
     }
 
+    // 타임아웃이 적용된 안전한 fetch 함수 (네트워크 지연으로 0%에 멈추는 현상 원천 차단)
+    async function fetchWithTimeout(url, timeoutMs = 2500) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+        clearTimeout(timer);
+        return res;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
+    }
+
     // --- 초기 로드 ---
     async function initApp() {
       if (isInitialized) return;
       isInitialized = true;
 
-      initDefaultStudentDB();
-      renderStudentSelectors();
-      handleSelectStudent(WOOSHIN_STUDENT_NAMES[0]);
-      initMediaStream();
-      initSpeechRecognition();
-      if (window.lucide) lucide.createIcons();
+      try {
+        initDefaultStudentDB();
+        renderStudentSelectors();
+        handleSelectStudent(WOOSHIN_STUDENT_NAMES[0]);
+        if (window.lucide) {
+          try { lucide.createIcons(); } catch (e) {}
+        }
+      } catch (e) {
+        console.error("초기 UI 렌더링 오류:", e);
+      }
+
+      // 카메라 및 마이크 초기화는 비동기로 별도 실행 (권한 대기 중에도 로딩바가 멈추지 않게 함)
+      setTimeout(() => {
+        initMediaStream();
+        initSpeechRecognition();
+      }, 100);
+
+      // 최대 3.5초 내에는 무조건 로딩 화면을 끝내고 학생 선택창을 열도록 안전장치 가동
+      const safetyTimer = setTimeout(() => {
+        setGateLoadingProgress(100, "준비 완료!");
+        finishGateLoadingUI();
+      }, 3500);
 
       // GitHub 저장소에 함께 올라간 questions.txt 자동 로드 (% 게이지바 진행)
       await autoLoadTxtFilesFromRepo();
+      clearTimeout(safetyTimer);
     }
 
-    if (document.readyState === "loading") {
-      window.addEventListener("DOMContentLoaded", initApp);
-    } else {
-      initApp();
-    }
+    // DOM 상태와 무관하게 즉시 실행 + load 이벤트 이중 보장
+    initApp();
+    window.addEventListener("DOMContentLoaded", initApp);
+    window.addEventListener("load", initApp);
 
     // --- GitHub 저장소의 questions.txt 자동 Fetch (% 게이지바 연동 및 경로/인코딩 완벽 호환) ---
     async function autoLoadTxtFilesFromRepo() {
-      setGateLoadingProgress(10, "면접 대비 질문 연동 중...");
+      setGateLoadingProgress(20, "면접 대비 질문 연동 중...");
 
-      // 현재 URL 분석하여 가능한 모든 경로 + GitHub Raw URL 자동 생성
       const loc = window.location;
       const pathname = loc.pathname;
       const dirPath = pathname.endsWith("/")
@@ -671,8 +704,7 @@
       const candidates = [
         "questions.txt",
         "./questions.txt",
-        `${dirPath}questions.txt`,
-        `${loc.origin}${dirPath}questions.txt`
+        `${dirPath}questions.txt`
       ];
 
       // 만약 *.github.io 도메인이라면 raw.githubusercontent.com 주소도 후보에 추가
@@ -686,31 +718,27 @@
         }
       }
 
-      // 중복 제거
       const uniqueCandidates = [...new Set(candidates)];
 
-      let fakeProgress = 15;
+      let fakeProgress = 25;
       const progressTimer = setInterval(() => {
-        if (fakeProgress < 78) {
-          fakeProgress += 6;
+        if (fakeProgress < 80) {
+          fakeProgress += 8;
           setGateLoadingProgress(fakeProgress);
         }
-      }, 80);
+      }, 90);
 
       for (const candidateUrl of uniqueCandidates) {
         try {
           const sep = candidateUrl.includes("?") ? "&" : "?";
           const fetchUrl = `${candidateUrl}${sep}t=${Date.now()}`;
-          const response = await fetch(fetchUrl, { cache: "no-store" });
+          const response = await fetchWithTimeout(fetchUrl, 2500);
 
-          if (response.ok) {
-            setGateLoadingProgress(85, "질문 데이터 인코딩 확인 및 학생별 매칭 중...");
+          if (response && response.ok) {
+            setGateLoadingProgress(88, "질문 데이터 분석 및 학생별 매칭 중...");
             const buffer = await response.arrayBuffer();
 
-            // 1차: UTF-8 디코딩 시도
             let text = new TextDecoder("utf-8").decode(buffer);
-
-            // 만약 한글이 깨져 있거나() 학생 이름이 안 보이면 EUC-KR(CP949)로 자동 재디코딩!
             const hasStudentName = WOOSHIN_STUDENT_NAMES.some(n => text.includes(n));
             if (!hasStudentName || text.includes("\uFFFD")) {
               try {
@@ -728,20 +756,20 @@
                 setGateLoadingProgress(100, "면접 대비 질문 연동 완료!");
                 renderStudentSelectors();
                 handleSelectStudent(currentStudentName);
-                await new Promise(r => setTimeout(r, 250));
+                await new Promise(r => setTimeout(r, 200));
                 finishGateLoadingUI();
                 return;
               }
             }
           }
         } catch (err) {
-          console.warn("파일 자동 로드 시도 실패:", candidateUrl, err);
+          console.warn("파일 자동 로드 시도 실패:", candidateUrl);
         }
       }
 
       clearInterval(progressTimer);
       setGateLoadingProgress(100, "준비 완료!");
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 150));
       finishGateLoadingUI();
     }
 
