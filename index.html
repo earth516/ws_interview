@@ -606,10 +606,31 @@
         studentQuestionDB[name] = {
           coreQuestions: [
             {
-              id: `${name}_Q000`,
-              code: "Q000",
-              category: "공통 지원동기 질문",
-              text: "Q000. 지원한 대학과 학과(전공)를 선택한 동기와 입학 후 학업 계획을 말씀해 주세요.",
+              id: `${name}_COMMON1`,
+              code: "공통 1",
+              category: "공통질문",
+              text: "공통 1. 우리 학과에 지원한 동기가 무엇인가요?",
+              followUps: []
+            },
+            {
+              id: `${name}_COMMON2`,
+              code: "공통 2",
+              category: "공통질문",
+              text: "공통 2. 앞으로의 학업 계획이 무엇인가요?",
+              followUps: []
+            },
+            {
+              id: `${name}_COMMON3`,
+              code: "공통 3",
+              category: "공통질문",
+              text: "공통 3. 마지막으로 하고싶은말이 있나요?",
+              followUps: []
+            },
+            {
+              id: `${name}_COMMON4`,
+              code: "공통 4",
+              category: "공통질문",
+              text: "공통 4. 3년간 가장 기억에 남는 활동이 무엇인가요?",
               followUps: []
             }
           ],
@@ -639,8 +660,8 @@
       filterGateStudents(document.getElementById("gateStudentSearch")?.value || "");
     }
 
-    // 타임아웃이 적용된 안전한 fetch 함수 (네트워크 지연으로 0%에 멈추는 현상 원천 차단)
-    async function fetchWithTimeout(url, timeoutMs = 2500) {
+    // 대용량 questions.txt(약 450KB)도 끊기지 않도록 타임아웃 15초로 넉넉하게 설정
+    async function fetchWithTimeout(url, timeoutMs = 15000) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -675,11 +696,11 @@
         initSpeechRecognition();
       }, 100);
 
-      // 최대 3.5초 내에는 무조건 로딩 화면을 끝내고 학생 선택창을 열도록 안전장치 가동
+      // 최대 12초 안전장치
       const safetyTimer = setTimeout(() => {
         setGateLoadingProgress(100, "준비 완료!");
         finishGateLoadingUI();
-      }, 3500);
+      }, 12000);
 
       // GitHub 저장소에 함께 올라간 questions.txt 자동 로드 (% 게이지바 진행)
       await autoLoadTxtFilesFromRepo();
@@ -701,10 +722,13 @@
         ? pathname
         : pathname.substring(0, pathname.lastIndexOf("/") + 1);
 
+      // 가능한 모든 상대/절대 경로 후보 생성
       const candidates = [
         "questions.txt",
         "./questions.txt",
-        `${dirPath}questions.txt`
+        `${dirPath}questions.txt`,
+        `${loc.origin}${dirPath}questions.txt`,
+        "전체28명_학생별_핵심질문_꼬리질문_통합.txt"
       ];
 
       // 만약 *.github.io 도메인이라면 raw.githubusercontent.com 주소도 후보에 추가
@@ -715,6 +739,9 @@
         if (username && repoName) {
           candidates.push(`https://raw.githubusercontent.com/${username}/${repoName}/main/questions.txt`);
           candidates.push(`https://raw.githubusercontent.com/${username}/${repoName}/master/questions.txt`);
+        } else if (username) {
+          candidates.push(`https://raw.githubusercontent.com/${username}/${username}.github.io/main/questions.txt`);
+          candidates.push(`https://raw.githubusercontent.com/${username}/${username}.github.io/master/questions.txt`);
         }
       }
 
@@ -722,20 +749,20 @@
 
       let fakeProgress = 25;
       const progressTimer = setInterval(() => {
-        if (fakeProgress < 80) {
-          fakeProgress += 8;
+        if (fakeProgress < 82) {
+          fakeProgress += 6;
           setGateLoadingProgress(fakeProgress);
         }
-      }, 90);
+      }, 100);
 
       for (const candidateUrl of uniqueCandidates) {
         try {
           const sep = candidateUrl.includes("?") ? "&" : "?";
           const fetchUrl = `${candidateUrl}${sep}t=${Date.now()}`;
-          const response = await fetchWithTimeout(fetchUrl, 2500);
+          const response = await fetchWithTimeout(fetchUrl, 15000);
 
           if (response && response.ok) {
-            setGateLoadingProgress(88, "질문 데이터 분석 및 학생별 매칭 중...");
+            setGateLoadingProgress(88, "4,748개 문항 분석 및 학생별 매칭 중...");
             const buffer = await response.arrayBuffer();
 
             let text = new TextDecoder("utf-8").decode(buffer);
@@ -749,14 +776,14 @@
               } catch (e) {}
             }
 
-            if (text && /Q\d+/i.test(text)) {
+            if (text && (/Q\d+/i.test(text) || /공통\s*\d+/.test(text))) {
               const parsedCount = parseCoreAndFollowUpText(text, "questions.txt");
               if (parsedCount > 0) {
                 clearInterval(progressTimer);
-                setGateLoadingProgress(100, "면접 대비 질문 연동 완료!");
+                setGateLoadingProgress(100, `면접 대비 질문 연동 완료! (${parsedCount}명)`);
                 renderStudentSelectors();
                 handleSelectStudent(currentStudentName);
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => setTimeout(r, 250));
                 finishGateLoadingUI();
                 return;
               }
@@ -773,12 +800,12 @@
       finishGateLoadingUI();
     }
 
-    // --- 핵심 질문(1. 핵심 질문) 및 꼬리질문(2. 꼬리질문 + 연결 핵심 질문: Q번호) 정밀 파서 ---
+    // --- 핵심 질문(공통 1~4 + Q번호) 및 꼬리질문(2. 꼬리질문 + 연결 핵심 질문: Q번호) 정밀 파서 ---
     function parseCoreAndFollowUpText(rawText, fileName = "") {
       const normalized = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^\uFEFF/, "");
       const allLines = normalized.split("\n");
 
-      // 줄 단위로 스캔하여 학생별 섹션 시작 위치 찾기 ("김우현 | ..." 또는 "###" 다음의 학생 이름 헤더)
+      // 줄 단위로 스캔하여 학생별 섹션 시작 위치 찾기 ("김우현 | 활동명 포함 핵심 질문 · 꼬리질문" 등)
       const sectionStarts = [];
       for (let i = 0; i < allLines.length; i++) {
         const line = allLines[i].trim();
@@ -787,7 +814,7 @@
         for (const name of WOOSHIN_STUDENT_NAMES) {
           if (line.startsWith(name)) {
             const afterName = line.slice(name.length).trim();
-            // "김우현: 248문항" 같은 상단 요약표는 건너뛰고 실제 학생 섹션 헤더("김우현 | ...")만 매칭
+            // 상단 요약표("김우현: 251문항")는 건너뛰고 실제 본문 헤더("김우현 | ...")만 매칭
             if (afterName.startsWith("|") || (afterName.includes("핵심") && !afterName.startsWith(":"))) {
               sectionStarts.push({ studentName: name, lineIdx: i });
               break;
@@ -807,7 +834,6 @@
           });
         }
       } else {
-        // 단일 학생 파일인 경우
         let fallbackName = currentStudentName;
         for (const name of WOOSHIN_STUDENT_NAMES) {
           if (fileName.includes(name) || normalized.slice(0, 200).includes(name)) {
@@ -827,7 +853,7 @@
         if (!studentName) return;
 
         let sectionMode = "core"; // 'core' (1. 핵심 질문) vs 'followup' (2. 꼬리질문)
-        let currentCategory = "공통 질문";
+        let currentCategory = "공통질문";
         let pendingParentCode = null;
 
         const coreList = [];
@@ -866,7 +892,24 @@
             continue;
           }
 
-          // 문항 줄 감지 (Q001. ...)
+          // 1) "공통 1. 우리 학과에 지원한 동기가 무엇인가요?" 형태 매칭
+          const commonMatch = line.match(/^(공통\s*\d+)[\.\)\s]+(.+)$/);
+          if (commonMatch) {
+            const cCode = commonMatch[1].replace(/\s+/g, " ").trim();
+            const fullText = `${cCode}. ${commonMatch[2].trim()}`;
+            const coreObj = {
+              id: `${studentName}_${cCode}`,
+              code: cCode,
+              category: currentCategory || "공통질문",
+              text: fullText,
+              followUps: []
+            };
+            coreList.push(coreObj);
+            coreMapByCode[cCode] = coreObj;
+            continue;
+          }
+
+          // 2) "Q001. ..." 일반 문항 줄 매칭
           const qMatch = line.match(/^(Q\d+)[\.\)\s]+(.+)$/i);
           if (qMatch) {
             const qCode = qMatch[1].toUpperCase();
@@ -907,41 +950,20 @@
         }
 
         if (coreList.length > 0) {
-          const anyFollowUpLinked = coreList.some(c => c.followUps.length > 0) || generalFollowUps.length > 0;
-          if (!anyFollowUpLinked) {
-            const regroupedCore = [];
-            let lastCoreByCat = {};
-            coreList.forEach((item) => {
-              if (!lastCoreByCat[item.category]) {
-                lastCoreByCat[item.category] = item;
-                regroupedCore.push(item);
-              } else {
-                lastCoreByCat[item.category].followUps.push({
-                  code: item.code,
-                  category: item.category,
-                  text: item.text
-                });
+          if (generalFollowUps.length > 0) {
+            // 공통질문이 아닌 일반 활동 핵심 질문들에 공통 꼬리질문 연결
+            coreList.forEach((coreItem, idx) => {
+              if (!coreItem.code.startsWith("공통") && coreItem.followUps.length === 0) {
+                const g1 = generalFollowUps[idx % generalFollowUps.length];
+                const g2 = generalFollowUps[(idx + 1) % generalFollowUps.length];
+                coreItem.followUps = [g1, g2].filter(Boolean);
               }
             });
-            studentQuestionDB[studentName] = {
-              coreQuestions: regroupedCore,
-              generalFollowUps: []
-            };
-          } else {
-            if (generalFollowUps.length > 0) {
-              coreList.forEach((coreItem, idx) => {
-                if (coreItem.followUps.length === 0) {
-                  const g1 = generalFollowUps[idx % generalFollowUps.length];
-                  const g2 = generalFollowUps[(idx + 1) % generalFollowUps.length];
-                  coreItem.followUps = [g1, g2].filter(Boolean);
-                }
-              });
-            }
-            studentQuestionDB[studentName] = {
-              coreQuestions: coreList,
-              generalFollowUps
-            };
           }
+          studentQuestionDB[studentName] = {
+            coreQuestions: coreList,
+            generalFollowUps
+          };
           updatedStudentsCount++;
         }
       });
@@ -1314,7 +1336,7 @@
         if (onEndCallback) onEndCallback();
         return;
       }
-      const cleanText = activeQ.text.replace(/^Q\d+\.\s*/i, "");
+      const cleanText = activeQ.text.replace(/^(Q\d+|공통\s*\d+)\.\s*/i, "");
       const utter = new SpeechSynthesisUtterance(cleanText);
       utter.lang = "ko-KR";
       utter.rate = 0.98;
