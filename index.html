@@ -62,6 +62,38 @@
     </div>
   </div>
 
+  <!-- ==================== 0-B. 초기 접속 시 카메라·마이크 권한 요청 안내 모달 ==================== -->
+  <div id="mediaPermissionModal" class="fixed inset-0 z-[55] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/40 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl text-center space-y-5">
+      <div class="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto gap-1.5 text-emerald-400">
+        <i data-lucide="camera" class="w-7 h-7"></i>
+        <i data-lucide="mic" class="w-7 h-7"></i>
+      </div>
+      <div class="space-y-2">
+        <span class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+          우신고등학교 대학면접 AI 시뮬레이터
+        </span>
+        <h2 class="text-xl font-extrabold text-white">카메라 및 마이크 권한 허용 안내</h2>
+        <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+          실전 화상 면접 녹화와 음성 답변 분석을 위해<br />
+          브라우저의 <strong class="text-emerald-300">카메라 및 마이크 접근 권한</strong>이 필요합니다.
+        </p>
+      </div>
+
+      <div id="modalPermissionStatus" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs leading-relaxed text-left"></div>
+
+      <div class="space-y-2.5 pt-1">
+        <button id="grantMediaBtn" onclick="requestInitialMediaPermission()" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-extrabold text-sm sm:text-base shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition">
+          <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+          <span>카메라 · 마이크 허용하고 시작하기</span>
+        </button>
+        <button onclick="closeMediaPermissionModal()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition">
+          나중에 설정하고 학생 목록 먼저 보기
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 0. 초기 접속 시 학생 이름 선택 게이트 모달 ==================== -->
   <div id="studentGateModal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-slate-900 border border-emerald-500/30 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
@@ -775,7 +807,7 @@
 
       // 카메라 및 마이크 초기화는 비동기로 별도 실행 (권한 대기 중에도 로딩바가 멈추지 않게 함)
       setTimeout(() => {
-        initMediaStream();
+        checkExistingMediaPermission();
         initSpeechRecognition();
       }, 100);
 
@@ -1158,127 +1190,116 @@
       document.getElementById("studentSelectDropdown").value = name;
 
       updateCategoryDropdown();
-      renderStudentSelectors();
-      resetInterview();
       updateCurrentQuestionDisplay();
       renderQuestionList();
+      renderStudentSelectors();
     }
 
     function updateCategoryDropdown() {
-      const select = document.getElementById("categoryFilterSelect");
-      const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
-      const categories = ["ALL", ...new Set(allCore.map(q => q.category))];
-
-      select.innerHTML = categories.map(cat =>
-        `<option value="${cat}" ${cat === currentCategoryFilter ? 'selected' : ''}>${cat === 'ALL' ? `전체 핵심 질문 (${allCore.length})` : cat}</option>`
-      ).join("");
+      const selectEl = document.getElementById("categoryFilterSelect");
+      if (!selectEl) return;
+      const coreList = studentQuestionDB[currentStudentName]?.coreQuestions || [];
+      const categories = [...new Set(coreList.map(q => q.category))];
+      selectEl.innerHTML = `<option value="ALL">전체 핵심 질문 (${coreList.length}문항)</option>` +
+        categories.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+      selectEl.value = currentCategoryFilter;
     }
 
-    function handleCategoryFilter(category) {
-      currentCategoryFilter = category;
+    function handleCategoryFilter(cat) {
+      if (interviewStatus !== "idle") return;
+      currentCategoryFilter = cat;
       const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
-      filteredCoreQuestions = category === "ALL" ? [...allCore] : allCore.filter(q => q.category === category);
+      filteredCoreQuestions = cat === "ALL"
+        ? [...allCore]
+        : allCore.filter(q => q.category === cat);
       currentCoreIndex = 0;
       isFollowUpMode = false;
+      currentFollowUpList = [];
+      currentFollowUpIndex = 0;
       resetInterview();
       updateCurrentQuestionDisplay();
     }
 
-    // 현재 출제 대상 질문 객체 반환 (핵심 질문 모드 vs 꼬리질문 모드)
     function getActiveQuestionObj() {
-      const coreQ = filteredCoreQuestions[currentCoreIndex] || filteredCoreQuestions[0];
-      if (!coreQ) {
-        return { code: "Q001", category: "기본 질문", text: "질문을 준비 중입니다.", isFollowUp: false, followUps: [] };
-      }
+      const coreQ = filteredCoreQuestions[currentCoreIndex];
+      if (!coreQ) return null;
       if (isFollowUpMode && currentFollowUpList[currentFollowUpIndex]) {
-        const fq = currentFollowUpList[currentFollowUpIndex];
         return {
-          code: fq.code,
-          category: fq.category || coreQ.category,
-          text: fq.text,
+          ...currentFollowUpList[currentFollowUpIndex],
           isFollowUp: true,
           parentCore: coreQ
         };
       }
       return {
-        code: coreQ.code,
-        category: coreQ.category,
-        text: coreQ.text,
-        isFollowUp: false,
-        followUps: coreQ.followUps || []
+        ...coreQ,
+        isFollowUp: false
       };
     }
 
     function updateCurrentQuestionDisplay() {
       const activeQ = getActiveQuestionObj();
-      const coreQ = filteredCoreQuestions[currentCoreIndex] || filteredCoreQuestions[0];
-      const linkedFollowUps = coreQ?.followUps || [];
-
       const typeBadge = document.getElementById("questionTypeBadge");
       const counterBadge = document.getElementById("questionCounterBadge");
       const catBadge = document.getElementById("questionCategoryBadge");
       const linkedBadge = document.getElementById("linkedFollowUpCountBadge");
       const parentBar = document.getElementById("parentCoreQuestionBar");
       const parentText = document.getElementById("parentCoreQuestionText");
+      const qTextEl = document.getElementById("questionTextDisplay");
+      const listenBtn = document.getElementById("listenQuestionBtn");
+      const prevBtn = document.getElementById("prevQBtn");
+      const nextBtn = document.getElementById("nextQBtn");
 
-      catBadge.textContent = activeQ.category;
+      if (!activeQ) {
+        if (qTextEl) qTextEl.textContent = "선택된 질문이 없습니다.";
+        return;
+      }
 
-      if (isFollowUpMode) {
+      if (activeQ.isFollowUp) {
         typeBadge.textContent = `연계 꼬리질문 (${currentFollowUpIndex + 1}/${currentFollowUpList.length})`;
-        typeBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40";
-        counterBadge.textContent = `핵심 ${currentCoreIndex + 1}의 꼬리질문`;
+        typeBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
+        counterBadge.textContent = `핵심 ${currentCoreIndex + 1}번 연계`;
         linkedBadge.classList.add("hidden");
-
         parentBar.classList.remove("hidden");
         parentBar.classList.add("flex");
-        parentText.textContent = coreQ ? coreQ.text : "";
+        parentText.textContent = activeQ.parentCore?.text || "";
       } else {
         typeBadge.textContent = "핵심 질문";
         typeBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
         counterBadge.textContent = `핵심 ${currentCoreIndex + 1} / ${filteredCoreQuestions.length}`;
+        parentBar.classList.add("hidden");
+        parentBar.classList.remove("flex");
 
-        if (linkedFollowUps.length > 0) {
-          linkedBadge.textContent = `연계 꼬리질문 ${linkedFollowUps.length}개`;
+        const fCount = activeQ.followUps?.length || 0;
+        if (fCount > 0) {
+          linkedBadge.textContent = `연계 꼬리질문 ${fCount}개`;
           linkedBadge.classList.remove("hidden");
         } else {
           linkedBadge.classList.add("hidden");
         }
-
-        parentBar.classList.add("hidden");
-        parentBar.classList.remove("flex");
       }
 
-      const qTextEl = document.getElementById("questionTextDisplay");
-      const listenBtn = document.getElementById("listenQuestionBtn");
+      catBadge.textContent = activeQ.category;
 
-      // 면접 시작 전(idle)이거나 5초 준비 카운트다운(pre-countdown) 중일 때는 질문 블라인드 유지!
-      if (interviewStatus === "idle" || interviewStatus === "pre-countdown") {
-        qTextEl.textContent = isFollowUpMode
-          ? `🔒 [면접 시작]을 누르면 5초 카운트다운 후 연결된 꼬리질문(${currentFollowUpIndex + 1}/${currentFollowUpList.length})이 공개됩니다.`
-          : "🔒 [면접 시작] 버튼을 누르면 5초 카운트다운 후 질문이 공개됩니다.";
-        qTextEl.className = "text-lg sm:text-xl font-bold text-slate-400 leading-relaxed py-1";
-        if (listenBtn) {
-          listenBtn.classList.add("hidden");
-          listenBtn.classList.remove("flex");
-        }
-      } else {
-        // 질문 낭독 단계, 낭독 후 3초 대기, 녹화 중, 완료 시에는 질문 텍스트 공개
-        qTextEl.textContent = activeQ.text;
+      // 면접 시작 전('idle' 또는 'pre-countdown')에는 질문 블라인드 유지, 낭독 시작부터 공개
+      const isRevealed = interviewStatus === "reading-question" ||
+                         interviewStatus === "post-reading-countdown" ||
+                         interviewStatus === "recording" ||
+                         interviewStatus === "completed";
+
+      if (isRevealed) {
+        qTextEl.textContent = `Q. ${activeQ.text}`;
         qTextEl.className = "text-lg sm:text-2xl font-bold text-white leading-relaxed";
-        if (listenBtn) {
-          listenBtn.classList.remove("hidden");
-          listenBtn.classList.add("flex");
-        }
+        listenBtn.classList.remove("hidden");
+        listenBtn.classList.add("flex");
+      } else {
+        qTextEl.textContent = "🔒 [면접 시작] 버튼을 누르면 5초 카운트다운 후 질문이 공개됩니다.";
+        qTextEl.className = "text-lg sm:text-2xl font-bold text-slate-400 leading-relaxed";
+        listenBtn.classList.add("hidden");
+        listenBtn.classList.remove("flex");
       }
 
-      const isBusy =
-        interviewStatus === "recording" ||
-        interviewStatus === "pre-countdown" ||
-        interviewStatus === "reading-question" ||
-        interviewStatus === "post-reading-countdown";
-      document.getElementById("prevQBtn").disabled = currentCoreIndex <= 0 || isBusy;
-      document.getElementById("nextQBtn").disabled = currentCoreIndex >= filteredCoreQuestions.length - 1 || isBusy;
-      document.getElementById("randomQBtn").disabled = isBusy;
+      if (prevBtn) prevBtn.disabled = currentCoreIndex === 0 || interviewStatus !== "idle";
+      if (nextBtn) nextBtn.disabled = currentCoreIndex >= filteredCoreQuestions.length - 1 || interviewStatus !== "idle";
     }
 
     function prevQuestion() {
@@ -1287,6 +1308,138 @@
         isFollowUpMode = false;
         resetInterview();
         updateCurrentQuestionDisplay();
+      }
+    }
+
+    // --- 초기 카메라·마이크 권한 모달 제어 및 모바일 호환 연결 ---
+    function closeMediaPermissionModal() {
+      const modal = document.getElementById("mediaPermissionModal");
+      if (modal) {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+    }
+
+    async function checkExistingMediaPermission() {
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const camPerm = await navigator.permissions.query({ name: "camera" }).catch(() => null);
+          const micPerm = await navigator.permissions.query({ name: "microphone" }).catch(() => null);
+          if (camPerm?.state === "granted" && micPerm?.state === "granted") {
+            await initMediaStream(true);
+            closeMediaPermissionModal();
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function requestInitialMediaPermission() {
+      const btn = document.getElementById("grantMediaBtn");
+      const statusBox = document.getElementById("modalPermissionStatus");
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>권한 요청 중... (상단 팝업에서 '허용'을 눌러주세요)</span>`;
+      }
+
+      // 모바일 브라우저 사용자 터치 시점에 AudioContext 잠금 해제
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const tempCtx = new AudioCtx();
+          if (tempCtx.state === "suspended") await tempCtx.resume();
+        }
+      } catch (e) {}
+
+      const ok = await initMediaStream(true);
+      if (ok) {
+        closeMediaPermissionModal();
+      } else {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>🔄 권한 다시 요청하기</span>`;
+        }
+        if (statusBox) {
+          statusBox.innerHTML = `
+            <strong>⚠️ 권한이 차단되었거나 장치를 찾을 수 없습니다.</strong><br/>
+            • 스마트폰: 주소창 왼쪽의 <strong>[자물쇠/설정 아이콘] → [권한]</strong>에서 카메라와 마이크를 <strong>'허용'</strong>으로 변경 후 다시 눌러주세요.<br/>
+            • 카카오톡 등 앱 내 브라우저라면 상단 <strong>[브라우저에서 바로 열기]</strong>를 먼저 눌러주세요.
+          `;
+          statusBox.classList.remove("hidden");
+        }
+      }
+    }
+
+    // --- 카메라 및 마이크 스트림 초기화 (PC & 모바일 iOS/Android 완벽 호환) ---
+    async function initMediaStream(silent = false) {
+      const promptBox = document.getElementById("cameraPermissionPrompt");
+      const liveVideo = document.getElementById("liveVideo");
+      const errTextEl = document.getElementById("cameraErrorText");
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (errTextEl) {
+          errTextEl.textContent = "현재 브라우저에서는 카메라/마이크 기능을 지원하지 않습니다. Chrome 또는 Safari 브라우저로 접속해 주세요.";
+        }
+        if (liveVideo) liveVideo.classList.add("hidden");
+        if (promptBox) promptBox.classList.remove("hidden");
+        return false;
+      }
+
+      try {
+        // 기존 스트림이 열려 있으면 정리
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(t => t.stop());
+        }
+
+        // 모바일과 PC 모두 호환되는 유연한 비디오/오디오 제약 조건
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        if (liveVideo) {
+          liveVideo.srcObject = mediaStream;
+          liveVideo.muted = true;
+          liveVideo.setAttribute("playsinline", "true");
+          liveVideo.classList.remove("hidden");
+          try { await liveVideo.play(); } catch (e) {}
+        }
+        if (promptBox) promptBox.classList.add("hidden");
+        return true;
+      } catch (err) {
+        console.warn("1차 카메라/마이크 접근 실패, 기본 설정으로 재시도:", err);
+        try {
+          // 고해상도 제약 실패 시 가장 기본 제약조건으로 재시도 (구형 스마트폰/태블릿 대응)
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+          });
+          if (liveVideo) {
+            liveVideo.srcObject = mediaStream;
+            liveVideo.muted = true;
+            liveVideo.setAttribute("playsinline", "true");
+            liveVideo.classList.remove("hidden");
+            try { await liveVideo.play(); } catch (e) {}
+          }
+          if (promptBox) promptBox.classList.add("hidden");
+          return true;
+        } catch (fallbackErr) {
+          console.warn("카메라/마이크 접근 최종 실패:", fallbackErr);
+          if (errTextEl) {
+            errTextEl.textContent = "카메라와 마이크 권한이 거부되었거나 사용 중입니다. 주소창 옆 권한 설정에서 카메라·마이크를 '허용'해 주세요.";
+          }
+          if (liveVideo) liveVideo.classList.add("hidden");
+          if (promptBox) promptBox.classList.remove("hidden");
+          return false;
+        }
       }
     }
 
@@ -1554,10 +1707,29 @@
     // 4) 3분 답변 녹화 및 타이머 시작
     // =========================================================================
     async function startInterviewSequence() {
-      if (!mediaStream) {
-        await initMediaStream();
-        if (!mediaStream) return;
+      if (!mediaStream || !mediaStream.active) {
+        const ok = await initMediaStream();
+        if (!ok || !mediaStream) {
+          const modal = document.getElementById("mediaPermissionModal");
+          if (modal) {
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+          }
+          return;
+        }
       }
+
+      // 모바일 브라우저에서 사용자 터치 시점에 AudioContext와 TTS 엔진 활성화
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const tempCtx = new AudioCtx();
+          if (tempCtx.state === "suspended") await tempCtx.resume();
+        }
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel();
+        }
+      } catch (e) {}
 
       // 이전 기록 초기화
       document.getElementById("analysisResultContainer").classList.add("hidden");
