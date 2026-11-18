@@ -45,6 +45,23 @@
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-600 selection:text-white">
 
+  <!-- ==================== 0-A. 모바일 인앱 브라우저(카카오톡 등) 감지 및 외부 브라우저 열기 배너 ==================== -->
+  <div id="inAppBrowserBanner" class="hidden fixed top-0 inset-x-0 z-[60] bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-slate-950 px-4 py-3 shadow-2xl">
+    <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-center sm:text-left">
+      <div class="text-xs sm:text-sm font-extrabold leading-snug">
+        ⚠️ 현재 메신저(카카오톡 등) 내부 브라우저로 접속하셨습니다. 원활한 카메라·음성 인식을 위해 <span class="underline">외부 브라우저(Chrome/Safari)</span>로 열어주세요!
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="openInExternalBrowser()" class="px-3.5 py-1.5 rounded-xl bg-slate-950 text-amber-300 font-extrabold text-xs shadow hover:bg-slate-900 transition">
+          🚀 브라우저에서 바로 열기
+        </button>
+        <button onclick="copyCurrentUrlForBrowser()" class="px-3 py-1.5 rounded-xl bg-white/80 text-slate-900 font-bold text-xs hover:bg-white transition">
+          주소 복사
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 0. 초기 접속 시 학생 이름 선택 게이트 모달 ==================== -->
   <div id="studentGateModal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-slate-900 border border-emerald-500/30 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
@@ -601,6 +618,68 @@
     let interviewHistory = [];
     let isInitialized = false;
 
+    // --- 모바일 인앱 브라우저(카카오톡, 인스타, 네이버, 라인 등) 감지 및 외부 브라우저 강제 실행 ---
+    function openInExternalBrowser() {
+      const currentUrl = window.location.href;
+      const ua = navigator.userAgent || "";
+      const isAndroid = /Android/i.test(ua);
+      const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+      // 1. 카카오톡 인앱 브라우저인 경우 (안드로이드 & iOS 모두 지원하는 공식 외부 브라우저 호출 스킴)
+      if (/KAKAOTALK/i.test(ua)) {
+        window.location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(currentUrl);
+        return;
+      }
+
+      // 2. 안드로이드 기타 인앱 브라우저(인스타그램, 라인, 페이스북, 에브리타임 등) -> 크롬 외부 브라우저 Intent 실행
+      if (isAndroid) {
+        const cleanUrl = currentUrl.replace(/^https?:\/\//i, "");
+        const scheme = currentUrl.startsWith("https") ? "https" : "http";
+        window.location.href = `intent://${cleanUrl}#Intent;scheme=${scheme};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(currentUrl)};end`;
+        return;
+      }
+
+      // 3. iOS 기타 인앱 브라우저 -> 사파리 안내 표시
+      if (isIOS) {
+        copyCurrentUrlForBrowser(true);
+      }
+    }
+
+    function copyCurrentUrlForBrowser(showGuide = false) {
+      const dummy = document.createElement("textarea");
+      dummy.value = window.location.href;
+      document.body.appendChild(dummy);
+      dummy.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(dummy);
+
+      const banner = document.getElementById("inAppBrowserBanner");
+      if (banner) {
+        banner.innerHTML = `
+          <div class="max-w-4xl mx-auto text-center text-xs sm:text-sm font-extrabold py-1">
+            ✅ 주소가 복사되었습니다! 우측 하단(또는 상단)의 <span class="underline">[⋯] 또는 [공유] 버튼 → [Safari / 다른 브라우저로 열기]</span>를 누르거나 Safari 주소창에 붙여넣어 주세요.
+          </div>
+        `;
+      }
+    }
+
+    function checkAndRedirectInAppBrowser() {
+      const ua = navigator.userAgent || "";
+      const isInApp = /KAKAOTALK|Instagram|NAVER|Line|FBAN|FBAV|DaumApps|EverytimeApp/i.test(ua);
+      if (!isInApp) return;
+
+      // 상단 외부 브라우저 열기 안내 배너 표시
+      const banner = document.getElementById("inAppBrowserBanner");
+      if (banner) banner.classList.remove("hidden");
+
+      // 카카오톡이나 안드로이드 인앱 브라우저에서 열었을 때 즉시 외부 브라우저로 자동 리다이렉트 시도
+      if (/KAKAOTALK/i.test(ua) || /Android/i.test(ua)) {
+        setTimeout(() => {
+          openInExternalBrowser();
+        }, 150);
+      }
+    }
+
     // --- 기본 학생 DB 초기화 및 로딩 게이지바 제어 함수 ---
     function initDefaultStudentDB() {
       WOOSHIN_STUDENT_NAMES.forEach((name) => {
@@ -679,6 +758,9 @@
     async function initApp() {
       if (isInitialized) return;
       isInitialized = true;
+
+      // 모바일 메신저(카카오톡 등)에서 링크 클릭 시 외부 브라우저 자동 전환 실행
+      checkAndRedirectInAppBrowser();
 
       try {
         initDefaultStudentDB();
