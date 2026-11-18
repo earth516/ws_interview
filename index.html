@@ -102,16 +102,6 @@
 
       <!-- 학생 선택 그리드 -->
       <div id="gateStudentGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5 max-h-[52vh] overflow-y-auto p-1"></div>
-
-      <!-- 하단 파일 직접 업로드 보조 버튼 -->
-      <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs text-slate-400">
-        <span id="gateLoadStatusText">💡 자신의 이름을 클릭하면 면접실로 입장합니다. (처음에는 핵심 질문만 출제됩니다)</span>
-        <label class="cursor-pointer px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 font-semibold flex items-center gap-1.5 border border-slate-700 transition">
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-          <span>질문 TXT 파일 직접 불러오기</span>
-          <input type="file" accept=".txt,.csv,.json" multiple onchange="handleFileUpload(event)" class="hidden" />
-        </label>
-      </div>
     </div>
   </div>
 
@@ -184,44 +174,9 @@
             <span class="hidden sm:inline">기록 (<span id="historyCountBadge">0</span>)</span>
           </button>
         </div>
-
-        <!-- API 키 설정 버튼 -->
-        <button onclick="openApiModal()" class="px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/60 transition" title="Gemini API 키 설정">
-          <i data-lucide="key" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span class="hidden lg:inline">API 연결됨</span>
-        </button>
       </div>
     </div>
   </header>
-
-  <!-- ==================== API 키 설정 모달 ==================== -->
-  <div id="apiModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i data-lucide="key" class="w-5 h-5 text-emerald-400"></i>
-          <span>Gemini API 키 설정</span>
-        </h3>
-        <button onclick="closeApiModal()" class="text-slate-400 hover:text-white text-sm">✕</button>
-      </div>
-      <div class="space-y-2 text-xs text-slate-300 leading-relaxed">
-        <p>사전 입력된 기본 API 키가 설정되어 있습니다. 만약 새 Google AI Studio API 키로 변경하려면 아래에 입력 후 저장하세요.</p>
-        <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-200">
-          💡 <strong>무료 한도 사용 안내:</strong> Google AI Studio에서 결제 수단을 연결하지 않은 기본 키는 무료 한도 내에서만 안전하게 작동하며 요금이 청구되지 않습니다.
-        </div>
-      </div>
-      <div class="space-y-3">
-        <input id="apiKeyInput" type="password" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500" placeholder="API 키 입력" />
-        <div class="flex items-center justify-between pt-2">
-          <button onclick="toggleApiKeyVisibility()" class="text-xs text-slate-400 hover:text-slate-200">키 보기/숨기기</button>
-          <div class="flex gap-2">
-            <button onclick="closeApiModal()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">닫기</button>
-            <button onclick="saveApiKey()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">저장하기</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ==================== 메인 컨텐츠 영역 ==================== -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -561,28 +516,27 @@
 
   <!-- ==================== 스크립트 로직 ==================== -->
   <script>
-    const DEFAULT_USER_API_KEY = "AQ.Ab8RN6JfZEsFEhAvowIZue7_l0dkaJToOqhR6HtHPfY7k0QjRg";
+    // 선생님의 API 키 비공개 인코딩 처리 (화면 노출 차단)
+    const _ENCODED_API_KEY = "QVEuQWI4Uk42SmZaRXNGRWhBdm93SVp1ZTdfbDBka2FKVG9PcWhSNkh0SFBmWTdrMFFqUmc=";
+    const getSecretApiKey = () => {
+      try { return atob(_ENCODED_API_KEY); } catch (e) { return ""; }
+    };
 
-    // GitHub 저장소에서 우선 탐색할 통합 TXT 파일 후보 목록
+    // GitHub 저장소에서 최우선으로 불러올 질문 파일 목록 (questions.txt 1순위 고정)
     const PRIMARY_SINGLE_TXT_CANDIDATES = [
-      "전체28명_학생별_핵심질문_꼬리질문_통합.txt",
       "questions.txt",
-      "22명_면접질문목록_합본.txt",
-      "김우현_최종_면접질문목록.txt",
-      "김하랑_최종_면접질문목록.txt",
-      "김희태_최종_면접질문목록.txt",
-      "박준서_최종_면접질문목록.txt",
-      "장부태_최종_면접질문목록.txt",
-      "김경원_최종_면접질문목록.txt"
+      "./questions.txt",
+      "전체28명_학생별_핵심질문_꼬리질문_통합.txt",
+      "22명_면접질문목록_합본.txt"
     ];
 
-    // 우신고등학교 28명 학생 명단
+    // 우신고등학교 28명 학생 명단 (가나다순 정렬)
     const WOOSHIN_STUDENT_NAMES = [
-      "김우현", "김하랑", "박준서", "김희태", "김경원", "장부태", "신승환",
-      "김지안", "안이환", "장예준", "김민철", "정원준", "양민건", "장서진",
-      "정세영", "김나을", "소하람", "심우진", "이지용", "정윤성", "이지호",
-      "정한길", "김도율", "이종혁", "정시후", "최재웅", "송현준", "김도운"
-    ];
+      "김경원", "김나을", "김도운", "김도율", "김민철", "김우현", "김지안",
+      "김하랑", "김희태", "박준서", "소하람", "송현준", "신승환", "심우진",
+      "안이환", "양민건", "이종혁", "이지용", "이지호", "장부태", "장서진",
+      "장예준", "정세영", "정시후", "정원준", "정윤성", "정한길", "최재웅"
+    ].sort((a, b) => a.localeCompare(b, "ko-KR"));
 
     // 학생별 데이터 구조:
     // studentQuestionDB[name] = {
@@ -592,7 +546,7 @@
     const studentQuestionDB = {};
 
     // --- 전역 상태 변수 ---
-    let currentStudentName = "김우현";
+    let currentStudentName = "김경원";
     let currentCategoryFilter = "ALL";
     let filteredCoreQuestions = []; // 오직 핵심 질문들만 담김 (처음부터 꼬리질문이 나오지 않음)
     let currentCoreIndex = 0;
@@ -631,10 +585,9 @@
 
       initDefaultStudentDB();
       renderStudentSelectors();
-      handleSelectStudent("김우현");
+      handleSelectStudent(WOOSHIN_STUDENT_NAMES[0]);
       initMediaStream();
       initSpeechRecognition();
-      loadSavedApiKey();
       if (window.lucide) lucide.createIcons();
 
       // GitHub 저장소에 함께 올라간 .txt 파일 자동 로드
@@ -647,115 +600,94 @@
       initApp();
     }
 
-    // TXT 로드 전 기본 핵심 질문 + 연계 꼬리질문 세팅
+    // questions.txt 로드 전 임시 기본값
     function initDefaultStudentDB() {
-      const sampleCore = [
-        {
-          id: "Q001",
-          code: "Q001",
-          category: "1학년 자율활동 · 무지와 도덕적 책임",
-          text: "Q001. 무지는 악인가라는 논증문에서 어떤 입장을 냈나요?",
-          followUps: [
-            { code: "Q002", category: "1학년 자율활동 · 꼬리질문", text: "Q002. 단순히 모르는 것과 책임을 회피하는 것은 어떻게 다른가요?" },
-            { code: "Q003", category: "1학년 자율활동 · 꼬리질문", text: "Q003. 데이터를 잘못 해석한 사람에게도 같은 기준을 적용할 수 있나요?" },
-            { code: "Q004", category: "1학년 자율활동 · 꼬리질문", text: "Q004. 분석자로서 실천할 원칙을 말해 보세요." }
-          ]
-        },
-        {
-          id: "Q005",
-          code: "Q005",
-          category: "2학년 자율활동 · SVM과 초평면",
-          text: "Q005. 지진 탐구 발표에서 소개한 분류 기법은 무엇인가요?",
-          followUps: [
-            { code: "Q006", category: "2학년 자율활동 · 꼬리질문", text: "Q006. 초평면은 분류에서 어떤 역할을 하나요?" },
-            { code: "Q007", category: "2학년 자율활동 · 꼬리질문", text: "Q007. 학습 자료를 완벽히 나누면 좋은 경계인가요?" },
-            { code: "Q008", category: "2학년 자율활동 · 꼬리질문", text: "Q008. 분류 성능을 확인할 자료는 어떻게 마련하겠나요?" }
-          ]
-        },
-        {
-          id: "Q245",
-          code: "Q245",
-          category: "최종 핵심 점검 · 실전 질문",
-          text: "Q245. 가장 자신 있는 활동 하나를 목적·과정·결과·한계 순서로 1분 안에 설명해 주세요.",
-          followUps: [
-            { code: "Q246", category: "최종 핵심 점검 · 꼬리질문", text: "Q246. 생기부 표현과 본인의 실제 경험이 다르거나 부정확한 부분은 어떻게 설명하겠어요?" },
-            { code: "Q247", category: "최종 핵심 점검 · 꼬리질문", text: "Q247. 대학에서 가장 먼저 보완할 기초와 새롭게 탐구할 질문은 무엇인가요?" }
-          ]
-        }
-      ];
-
       WOOSHIN_STUDENT_NAMES.forEach((name) => {
         studentQuestionDB[name] = {
-          coreQuestions: JSON.parse(JSON.stringify(sampleCore)),
+          coreQuestions: [
+            {
+              id: `${name}_Q001`,
+              code: "Q001",
+              category: "questions.txt 연동 대기 중",
+              text: "Q001. questions.txt 파일을 불러오는 중입니다. 잠시만 기다려 주세요...",
+              followUps: []
+            }
+          ],
           generalFollowUps: []
         };
       });
     }
 
-    // --- GitHub 저장소의 통합 TXT 파일 자동 Fetch ---
+    // --- GitHub 저장소의 questions.txt 자동 Fetch (캐시 방지 및 UTF-8 강제 디코딩) ---
     async function autoLoadTxtFilesFromRepo() {
-      const candidates = [
-        ...PRIMARY_SINGLE_TXT_CANDIDATES,
-        ...WOOSHIN_STUDENT_NAMES.map(n => `${n}_최종_면접질문목록.txt`)
-      ];
+      const cacheBuster = `?t=${Date.now()}`;
 
-      for (const fileName of [...new Set(candidates)]) {
+      for (const rawFileName of PRIMARY_SINGLE_TXT_CANDIDATES) {
         try {
-          const targetUrl = fileName.startsWith("http") ? fileName : `./${encodeURIComponent(fileName)}`;
-          const response = await fetch(targetUrl, { cache: "no-store" });
+          const cleanName = rawFileName.replace(/^\.\//, "");
+          const fetchUrl = `./${encodeURIComponent(cleanName)}${cacheBuster}`;
+          const response = await fetch(fetchUrl, { cache: "no-store" });
+
           if (response.ok) {
-            const text = await response.text();
-            if (text && /Q\d+/i.test(text)) {
-              parseCoreAndFollowUpText(text, fileName);
-              const gateStatus = document.getElementById("gateLoadStatusText");
-              if (gateStatus) {
-                gateStatus.textContent = `✅ [${fileName}] 28명 핵심·꼬리질문 연동 완료! 자신의 이름을 클릭해 입장하세요.`;
-              }
-              if (
-                fileName === "전체28명_학생별_핵심질문_꼬리질문_통합.txt" ||
-                fileName === "questions.txt" ||
-                fileName === "22명_면접질문목록_합본.txt"
-              ) {
-                break;
+            const buffer = await response.arrayBuffer();
+            const decoder = new TextDecoder("utf-8");
+            const text = decoder.decode(buffer);
+
+            if (text && /Q\d+\./i.test(text)) {
+              const parsedCount = parseCoreAndFollowUpText(text, cleanName);
+              if (parsedCount > 0) {
+                renderStudentSelectors();
+                handleSelectStudent(currentStudentName);
+                return;
               }
             }
           }
-        } catch (err) {}
+        } catch (err) {
+          console.warn("파일 자동 로드 시도 실패:", rawFileName, err);
+        }
       }
-
-      renderStudentSelectors();
-      handleSelectStudent(currentStudentName);
     }
 
     // --- 핵심 질문(1. 핵심 질문) 및 꼬리질문(2. 꼬리질문 + 연결 핵심 질문: Q번호) 정밀 파서 ---
     function parseCoreAndFollowUpText(rawText, fileName = "") {
-      // 학생 블록 분리 (### 구분선 또는 "이름 | 핵심 질문 · 꼬리질문" / "이름 | 최종 면접 질문 목록")
-      const blocks = rawText
-        .replace(/\r\n/g, "\n")
-        .split(/(?=\n*[가-힣]{2,4}\s*\|\s*(?:핵심\s*질문|최종\s*면접|면접\s*질문))|#{10,}/)
-        .map(b => b.trim())
-        .filter(Boolean);
+      const normalized = rawText.replace(/\r\n/g, "\n").replace(/^\uFEFF/, "");
 
-      blocks.forEach((block) => {
-        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+      // "학생이름 | 핵심 질문 · 꼬리질문" 또는 "학생이름 | 최종 면접 질문 목록" 또는 "학생이름 | 면접 질문 목록" 위치 전부 찾기
+      const headerRegex = /^([가-힣]{2,4})\s*\|\s*(?:핵심\s*질문|최종\s*면접|면접\s*질문).*$/gm;
+      const matches = [...normalized.matchAll(headerRegex)];
+
+      const blocks = [];
+      if (matches.length > 0) {
+        for (let i = 0; i < matches.length; i++) {
+          const startIdx = matches[i].index;
+          const endIdx = i + 1 < matches.length ? matches[i + 1].index : normalized.length;
+          blocks.push({
+            studentName: matches[i][1].trim(),
+            content: normalized.slice(startIdx, endIdx)
+          });
+        }
+      } else {
+        // 단일 학생 파일이거나 헤더 형식이 다른 경우
+        let fallbackName = currentStudentName;
+        const fnMatch = fileName.match(/^([가-힣]{2,4})/);
+        if (fnMatch && WOOSHIN_STUDENT_NAMES.includes(fnMatch[1])) {
+          fallbackName = fnMatch[1];
+        }
+        blocks.push({
+          studentName: fallbackName,
+          content: normalized
+        });
+      }
+
+      let updatedStudentsCount = 0;
+
+      blocks.forEach(({ studentName, content }) => {
+        if (!studentName || studentName === "전체") return;
+
+        const lines = content.split("\n").map(l => l.trim()).filter(Boolean);
         if (lines.length === 0) return;
 
-        // 1) 학생 이름 식별
-        let detectedName = null;
-        for (let i = 0; i < Math.min(10, lines.length); i++) {
-          const m = lines[i].match(/^([가-힣]{2,4})\s*\|\s*(?:핵심|최종|면접)/);
-          if (m) {
-            detectedName = m[1].trim();
-            break;
-          }
-        }
-        if (!detectedName && blocks.length === 1 && fileName) {
-          const fnMatch = fileName.match(/^([가-힣]{2,4})_/);
-          if (fnMatch) detectedName = fnMatch[1];
-        }
-        if (!detectedName) return;
-
-        // 2) 섹션 모드: 'core' (1. 핵심 질문) vs 'followup' (2. 꼬리질문)
+        // 섹션 모드: 'core' (1. 핵심 질문) vs 'followup' (2. 꼬리질문)
         let sectionMode = "core";
         let currentCategory = "공통 질문";
         let pendingParentCode = null;
@@ -765,7 +697,8 @@
         const generalFollowUps = [];
 
         for (const line of lines) {
-          if (/^={5,}/.test(line) || /^-{5,}/.test(line)) continue;
+          // 구분선(===, ###, ---) 무시
+          if (/^[=#-]{5,}/.test(line)) continue;
 
           // 섹션 전환 감지
           if (/^1\.\s*핵심\s*질문/.test(line)) {
@@ -800,7 +733,7 @@
 
             if (sectionMode === "core") {
               const coreObj = {
-                id: `${detectedName}_${qCode}`,
+                id: `${studentName}_${qCode}`,
                 code: qCode,
                 category: currentCategory,
                 text: fullText,
@@ -820,7 +753,7 @@
               if (pendingParentCode && coreMapByCode[pendingParentCode]) {
                 coreMapByCode[pendingParentCode].followUps.push(followObj);
               } else {
-                // 연결 핵심 질문 번호가 없는 경우 (예: 같은 카테고리의 핵심 질문에 연결 시도 후 없으면 공통 꼬리질문으로 분류)
+                // 연결 핵심 질문 번호가 명시되지 않은 경우 같은 카테고리의 핵심 질문에 우선 연결
                 const sameCatCore = coreList.find(c => c.category === currentCategory);
                 if (sameCatCore) {
                   sameCatCore.followUps.push(followObj);
@@ -833,10 +766,10 @@
           }
         }
 
-        // 만약 구버전 파일이라 1. 핵심 질문 / 2. 꼬리질문 구분이 없었다면 첫 질문을 핵심 질문, 같은 카테고리의 뒤따르는 질문을 꼬리질문으로 자동 그룹화
         if (coreList.length > 0) {
+          // 만약 구버전 파일이라 1. 핵심 질문 / 2. 꼬리질문 구분이 없었다면 첫 질문을 핵심 질문, 같은 카테고리의 뒤따르는 질문을 꼬리질문으로 자동 그룹화
           const anyFollowUpLinked = coreList.some(c => c.followUps.length > 0) || generalFollowUps.length > 0;
-          if (!anyFollowUpLinked && !rawText.includes("1. 핵심 질문")) {
+          if (!anyFollowUpLinked && !content.includes("1. 핵심 질문")) {
             const regroupedCore = [];
             let lastCoreByCat = {};
             coreList.forEach((item) => {
@@ -851,12 +784,12 @@
                 });
               }
             });
-            studentQuestionDB[detectedName] = {
+            studentQuestionDB[studentName] = {
               coreQuestions: regroupedCore,
               generalFollowUps: []
             };
           } else {
-            // 공통 꼬리질문(generalFollowUps)이 있는 학생은 각 핵심 질문에서 자신의 활동 기반 꼬리질문을 2개씩 이어 연습할 수 있도록 연결
+            // 공통 꼬리질문(generalFollowUps)이 있는 학생은 각 핵심 질문에서 꼬리질문을 2개씩 이어 연습할 수 있도록 연결
             if (generalFollowUps.length > 0) {
               coreList.forEach((coreItem, idx) => {
                 if (coreItem.followUps.length === 0) {
@@ -866,13 +799,16 @@
                 }
               });
             }
-            studentQuestionDB[detectedName] = {
+            studentQuestionDB[studentName] = {
               coreQuestions: coreList,
               generalFollowUps
             };
           }
+          updatedStudentsCount++;
         }
       });
+
+      return updatedStudentsCount;
     }
 
     // --- 초기 접속 학생 선택 게이트 모달 제어 ---
@@ -899,24 +835,20 @@
       const grid = document.getElementById("gateStudentGrid");
       if (!grid) return;
       const kw = keyword.trim();
-      const names = Object.keys(studentQuestionDB).filter(n => !kw || n.includes(kw));
+      const names = Object.keys(studentQuestionDB)
+        .sort((a, b) => a.localeCompare(b, "ko-KR"))
+        .filter(n => !kw || n.includes(kw));
 
       grid.innerHTML = names.map(name => {
-        const db = studentQuestionDB[name];
-        const coreCount = db?.coreQuestions?.length || 0;
-        const followCount = (db?.coreQuestions || []).reduce((acc, c) => acc + (c.followUps?.length || 0), 0);
         const isSelected = name === currentStudentName;
         return `
-          <button onclick="selectStudentFromGate('${name}')" class="p-3.5 rounded-2xl border text-left transition flex flex-col justify-between group ${
+          <button onclick="selectStudentFromGate('${name}')" class="p-3.5 rounded-2xl border text-left transition flex items-center justify-between group ${
             isSelected
               ? 'bg-emerald-600/25 border-emerald-400 text-white shadow-lg shadow-emerald-950/50'
               : 'bg-slate-950/90 border-slate-800 text-slate-200 hover:border-emerald-500/60 hover:bg-slate-900'
           }">
-            <div class="flex items-center justify-between w-full mb-1.5">
-              <span class="font-extrabold text-sm sm:text-base group-hover:text-emerald-300 transition">${name}</span>
-              <i data-lucide="arrow-right-circle" class="w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-600 group-hover:text-emerald-400'} transition"></i>
-            </div>
-            <span class="text-[11px] ${isSelected ? 'text-emerald-300' : 'text-slate-400'}">핵심 ${coreCount} · 꼬리 ${followCount}</span>
+            <span class="font-extrabold text-sm sm:text-base group-hover:text-emerald-300 transition">${name}</span>
+            <i data-lucide="arrow-right-circle" class="w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-600 group-hover:text-emerald-400'} transition"></i>
           </button>
         `;
       }).join("");
@@ -944,25 +876,23 @@
     function renderStudentSelectors() {
       const dropdown = document.getElementById("studentSelectDropdown");
       const grid = document.getElementById("studentGridContainer");
-      const names = Object.keys(studentQuestionDB);
+      const names = Object.keys(studentQuestionDB).sort((a, b) => a.localeCompare(b, "ko-KR"));
 
       dropdown.innerHTML = names.map(name => {
-        const coreLen = studentQuestionDB[name]?.coreQuestions?.length || 0;
-        return `<option value="${name}" class="bg-slate-900 text-white" ${name === currentStudentName ? 'selected' : ''}>${name} (핵심 ${coreLen}문항)</option>`;
+        return `<option value="${name}" class="bg-slate-900 text-white" ${name === currentStudentName ? 'selected' : ''}>${name}</option>`;
       }).join("");
 
       if (grid) {
         grid.innerHTML = names.map(name => {
           const isSelected = name === currentStudentName;
-          const coreLen = studentQuestionDB[name]?.coreQuestions?.length || 0;
           return `
-            <button onclick="handleSelectStudent('${name}'); switchTab('interview');" class="p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+            <button onclick="handleSelectStudent('${name}'); switchTab('interview');" class="p-3.5 rounded-xl border text-left transition flex items-center justify-between ${
               isSelected
                 ? 'bg-emerald-600/20 border-emerald-500 text-white shadow-lg shadow-emerald-900/20'
                 : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900'
             }">
               <span class="font-bold text-sm">${name}</span>
-              <span class="text-[11px] text-emerald-400 mt-1">핵심 ${coreLen}문항</span>
+              <i data-lucide="chevron-right" class="w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-600'}"></i>
             </button>
           `;
         }).join("");
@@ -1214,12 +1144,17 @@
       if (files.length === 0) return;
 
       let loadedCount = 0;
+      let totalStudentsParsed = 0;
       files.forEach((file) => {
         const reader = new FileReader();
         reader.onload = (e) => {
-          parseCoreAndFollowUpText(e.target.result, file.name);
+          totalStudentsParsed += parseCoreAndFollowUpText(e.target.result, file.name);
           loadedCount++;
           if (loadedCount === files.length) {
+            const gateStatus = document.getElementById("gateLoadStatusText");
+            if (gateStatus && totalStudentsParsed > 0) {
+              gateStatus.innerHTML = `<span class="text-emerald-400 font-bold">✅ [${file.name}] 수동 불러오기 완료! (${totalStudentsParsed}명 학생 질문 반영됨)</span>`;
+            }
             renderStudentSelectors();
             handleSelectStudent(currentStudentName);
           }
@@ -1719,7 +1654,7 @@
       const usedSec = customTimeLimit - timeLeft;
       const transcriptText = document.getElementById("transcriptInput").value.trim();
 
-      const savedKey = localStorage.getItem("WOOSHIN_GEMINI_API_KEY") || DEFAULT_USER_API_KEY || "";
+      const savedKey = getSecretApiKey();
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${savedKey.trim()}`;
 
       try {
@@ -1795,7 +1730,7 @@
         renderHistoryList();
       } catch (err) {
         console.error("AI 분석 에러:", err);
-        errorBox.textContent = "AI 분석 중 오류가 발생했습니다. 우측 상단 [API 연결됨] 버튼을 눌러 유효한 Gemini API 키가 설정되어 있는지 확인해 주세요.";
+        errorBox.textContent = "AI 분석 중 일시적인 통신 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
         errorBox.classList.remove("hidden");
       } finally {
         analyzeBtn.disabled = false;
@@ -1877,35 +1812,6 @@
           btn.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 text-slate-400 hover:text-slate-200";
         }
       });
-    }
-
-    // --- API 모달 제어 ---
-    function loadSavedApiKey() {
-      const saved = localStorage.getItem("WOOSHIN_GEMINI_API_KEY") || DEFAULT_USER_API_KEY;
-      document.getElementById("apiKeyInput").value = saved;
-    }
-
-    function openApiModal() {
-      const modal = document.getElementById("apiModal");
-      modal.classList.remove("hidden");
-      modal.classList.add("flex");
-    }
-
-    function closeApiModal() {
-      const modal = document.getElementById("apiModal");
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-    }
-
-    function toggleApiKeyVisibility() {
-      const input = document.getElementById("apiKeyInput");
-      input.type = input.type === "password" ? "text" : "password";
-    }
-
-    function saveApiKey() {
-      const val = document.getElementById("apiKeyInput").value.trim();
-      localStorage.setItem("WOOSHIN_GEMINI_API_KEY", val);
-      closeApiModal();
     }
   </script>
 </body>
