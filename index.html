@@ -419,7 +419,7 @@
             </div>
 
             <!-- 시작 / 종료 / 분석 버튼 -->
-            <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex flex-wrap sm:flex-nowrap items-center gap-2">
               <button id="startInterviewBtn" onclick="startInterviewSequence()" class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-base shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition">
                 <i data-lucide="play" class="w-5 h-5 fill-current"></i>
                 <span id="startInterviewBtnLabel">면접 시작</span>
@@ -435,18 +435,18 @@
                 <span>답변 완료 (녹화 종료)</span>
               </button>
 
-              <button id="analyzeBtn" onclick="analyzeWithGemini()" class="flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 hidden items-center justify-center gap-2 transition">
-                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <button id="analyzeBtn" onclick="analyzeWithGemini()" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs whitespace-nowrap shadow-lg shadow-emerald-600/25 hidden items-center justify-center gap-1.5 transition">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 shrink-0"></i>
                 <span id="analyzeBtnText">AI 면접 분석 리포트 생성</span>
               </button>
 
-              <button id="resetInterviewBtn" onclick="resetInterview()" class="py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm hidden items-center justify-center gap-1.5 border border-slate-700 transition">
-                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+              <button id="resetInterviewBtn" onclick="resetInterview()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs whitespace-nowrap shrink-0 hidden items-center justify-center gap-1 border border-slate-700 transition">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 shrink-0"></i>
                 <span>다시 도전</span>
               </button>
 
-              <button id="anotherQuestionBtn" onclick="moveToAnotherQuestion()" class="py-3.5 px-4 rounded-xl bg-teal-600/25 hover:bg-teal-600/40 text-teal-200 font-bold text-sm hidden items-center justify-center gap-1.5 border border-teal-500/40 transition">
-                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              <button id="anotherQuestionBtn" onclick="moveToAnotherQuestion()" class="py-2.5 px-3 rounded-xl bg-teal-600/25 hover:bg-teal-600/40 text-teal-200 font-bold text-xs whitespace-nowrap shrink-0 hidden items-center justify-center gap-1 border border-teal-500/40 transition">
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5 shrink-0"></i>
                 <span>다른 질문</span>
               </button>
             </div>
