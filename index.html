@@ -258,27 +258,31 @@
     <section id="tabSection-interview" class="space-y-6">
       <!-- 상단 학생 정보 & 현재 질문 카드 -->
       <div id="questionCardContainer" class="bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all">
-        <div class="flex flex-wrap items-center justify-end gap-3 mb-3">
-          <!-- 핵심 질문 필터 & 이동 컨트롤 -->
+        <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
+          <!-- 질문 목록 & 모드 버튼 -->
           <div class="flex flex-wrap items-center gap-2">
-            <select id="categoryFilterSelect" onchange="handleCategoryFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 max-w-[200px] sm:max-w-[260px]">
-              <option value="ALL">전체 핵심 질문</option>
+            <select id="categoryFilterSelect" onchange="handleCategoryFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 max-w-[200px] sm:max-w-[240px]">
+              <option value="ALL">질문 목록</option>
             </select>
 
-            <button onclick="pickRandomQuestion()" id="randomQBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition" title="핵심 질문 1개 무작위 추출">
+            <button onclick="startCommonQuestionsMode()" id="commonQBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition">
+              <span>공통질문</span>
+            </button>
+
+            <button onclick="pickRandomQuestion()" id="randomQBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition">
               <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
-              <span>랜덤 1개</span>
+              <span>랜덤 질문</span>
             </button>
 
-            <button onclick="startRandomFiveSet()" id="randomFiveQBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-200 text-xs font-bold flex items-center gap-1 border border-emerald-500/40 transition shadow-sm" title="1번 지원동기 필수 + 무작위 4개 = 총 5문항 실전 세트 구성">
+            <button onclick="startRandomFiveSet()" id="randomFiveQBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-200 text-xs font-bold flex items-center gap-1 border border-emerald-500/40 transition shadow-sm">
               <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-emerald-400"></i>
-              <span>랜덤 5개 질문 (지원동기 필수)</span>
+              <span>무작위 5개 질문</span>
             </button>
 
-            <button onclick="prevQuestion()" id="prevQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition" title="이전 핵심 질문">
+            <button onclick="prevQuestion()" id="prevQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition" title="이전 질문">
               <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
-            <button onclick="nextQuestion()" id="nextQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition" title="다음 핵심 질문">
+            <button onclick="nextQuestion()" id="nextQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition" title="다음 질문">
               <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
           </div>
@@ -596,7 +600,7 @@
 
     // 우신고등학교 28명 학생 명단 (가나다순 정렬)
     const WOOSHIN_STUDENT_NAMES = [
-      "김경원", "김명준", "김도운", "김도율", "김민철", "김우현", "김지안",
+      "김경원", "김나을", "김도운", "김도율", "김민철", "김우현", "김지안",
       "김하랑", "김희태", "박준서", "소하람", "송현준", "신승환", "심우진",
       "안이환", "양민건", "이종혁", "이지용", "이지호", "장부태", "장서진",
       "장예준", "정세영", "정시후", "정원준", "정윤성", "정한길", "최재웅"
@@ -613,6 +617,7 @@
     let currentStudentName = "김경원";
     let currentCategoryFilter = "ALL";
     let isRandomFiveMode = false;
+    let isCommonMode = false;
     let filteredCoreQuestions = []; // 오직 핵심 질문들만 담김 (처음부터 꼬리질문이 나오지 않음)
     let currentCoreIndex = 0;
 
@@ -1195,20 +1200,36 @@
       const selectEl = document.getElementById("categoryFilterSelect");
       if (!selectEl) return;
       const coreList = studentQuestionDB[currentStudentName]?.coreQuestions || [];
-      const categories = [...new Set(coreList.map(q => q.category))];
-      selectEl.innerHTML = `<option value="ALL">전체 핵심 질문 (${coreList.length}문항)</option>` +
-        (isRandomFiveMode ? `<option value="RANDOM_5">🎯 랜덤 5개 실전 세트 (지원동기 필수)</option>` : "") +
-        categories.map(cat => `<option value="${cat}">${cat}</option>`).join("");
-      selectEl.value = isRandomFiveMode ? "RANDOM_5" : currentCategoryFilter;
+      const nonCommonCategories = [...new Set(
+        coreList
+          .filter(q => !q.code.startsWith("공통") && q.category !== "공통질문")
+          .map(q => q.category)
+      )];
+      selectEl.innerHTML = `<option value="ALL">질문 목록 (${coreList.length}문항)</option>` +
+        (isCommonMode ? `<option value="COMMON_SET">질문 목록 (선택 세트)</option>` : "") +
+        (isRandomFiveMode ? `<option value="RANDOM_5">무작위 5개 질문</option>` : "") +
+        nonCommonCategories.map(cat => `<option value="${cat}">${cat}</option>`).join("");
+      if (isCommonMode) {
+        selectEl.value = "COMMON_SET";
+      } else if (isRandomFiveMode) {
+        selectEl.value = "RANDOM_5";
+      } else {
+        selectEl.value = currentCategoryFilter;
+      }
     }
 
     function handleCategoryFilter(cat) {
       if (interviewStatus !== "idle") return;
+      if (cat === "COMMON_SET") {
+        startCommonQuestionsMode();
+        return;
+      }
       if (cat === "RANDOM_5") {
         startRandomFiveSet();
         return;
       }
       isRandomFiveMode = false;
+      isCommonMode = false;
       currentCategoryFilter = cat;
       const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
       filteredCoreQuestions = cat === "ALL"
@@ -1222,29 +1243,56 @@
       updateCurrentQuestionDisplay();
     }
 
-    // 1번 지원동기 필수 + 무작위 4개 = 총 5개 실전 면접 세트 구성
+    // 공통질문 모드 (화면에는 공통질문 표시를 숨기고 질문 문항만 제시)
+    function startCommonQuestionsMode() {
+      if (interviewStatus !== "idle" && interviewStatus !== "completed") return;
+      const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
+      const commonList = allCore.filter(q => q.code.startsWith("공통") || q.category === "공통질문");
+      const targetList = commonList.length > 0 ? commonList : allCore.slice(0, 4);
+      if (targetList.length === 0) return;
+
+      isCommonMode = true;
+      isRandomFiveMode = false;
+      currentCategoryFilter = "COMMON_SET";
+      filteredCoreQuestions = [...targetList];
+      currentCoreIndex = 0;
+      isFollowUpMode = false;
+      currentFollowUpList = [];
+      currentFollowUpIndex = 0;
+
+      updateCategoryDropdown();
+      resetInterview();
+      updateCurrentQuestionDisplay();
+    }
+
+    // 무작위 5개 질문 세트 구성 (공통질문 1개 필수 포함 + 나머지 4개 무작위 추출, 화면에는 공통질문 표시 숨김)
     function startRandomFiveSet() {
       if (interviewStatus !== "idle" && interviewStatus !== "completed") return;
       const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
       if (allCore.length === 0) return;
 
-      // 1순위: '공통 1' 또는 '지원한 동기' / '지원동기'가 포함된 첫 번째 질문 추출
-      let motivationQ = allCore.find(q => q.code === "공통 1" || q.text.includes("지원한 동기") || q.text.includes("지원동기"));
-      if (!motivationQ) {
-        motivationQ = allCore[0];
-      }
+      const commonPool = allCore.filter(q => q.code.startsWith("공통") || q.category === "공통질문");
+      const pickedCommon = commonPool.length > 0
+        ? commonPool[Math.floor(Math.random() * commonPool.length)]
+        : allCore[0];
 
-      // 나머지 질문들 중 4개 무작위 추출 (Fisher-Yates 셔플)
-      const remaining = allCore.filter(q => q.id !== motivationQ.id);
+      const remaining = allCore.filter(q => q.id !== pickedCommon.id);
       for (let i = remaining.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
       }
       const pickedFour = remaining.slice(0, 4);
 
+      const combinedFive = [pickedCommon, ...pickedFour];
+      for (let i = combinedFive.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [combinedFive[i], combinedFive[j]] = [combinedFive[j], combinedFive[i]];
+      }
+
       isRandomFiveMode = true;
+      isCommonMode = false;
       currentCategoryFilter = "RANDOM_5";
-      filteredCoreQuestions = [motivationQ, ...pickedFour];
+      filteredCoreQuestions = combinedFive;
       currentCoreIndex = 0;
       isFollowUpMode = false;
       currentFollowUpList = [];
@@ -1320,7 +1368,9 @@
                          interviewStatus === "completed";
 
       if (isRevealed) {
-        qTextEl.textContent = `Q. ${activeQ.text}`;
+        // 화면에는 '공통'이라는 표기를 숨기고 순수 질문 문장만 출력
+        const hiddenCommonText = activeQ.text.replace(/^공통\s*\d+[\.\)\s]*/i, "").trim();
+        qTextEl.textContent = `Q. ${hiddenCommonText}`;
         qTextEl.className = "text-lg sm:text-2xl font-bold text-white leading-relaxed";
         listenBtn.classList.remove("hidden");
         listenBtn.classList.add("flex");
@@ -1605,7 +1655,10 @@
         if (onEndCallback) onEndCallback();
         return;
       }
-      const cleanText = activeQ.text.replace(/^(Q\d+|공통\s*\d+)\.\s*/i, "");
+      const cleanText = activeQ.text
+        .replace(/^공통\s*\d+[\.\)\s]*/i, "")
+        .replace(/^(Q\d+)[\.\)\s]*/i, "")
+        .trim();
       const utter = new SpeechSynthesisUtterance(cleanText);
       utter.lang = "ko-KR";
       utter.rate = 0.98;
