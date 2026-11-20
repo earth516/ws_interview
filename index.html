@@ -78,7 +78,7 @@
           실전 화상 면접 녹화와 음성 답변 분석을 위해<br />
           브라우저의 <strong class="text-emerald-300">카메라 및 마이크 접근 권한</strong>이 필요합니다.<br />
           <br />
-          효과적인 사용을 위해 PC나 태블릿으로 사용해주세요 ^^
+          효과적인 사용을 위해 PC나 태블릿으로 사용해주세요.
         </p>
       </div>
 
@@ -1181,7 +1181,8 @@
       currentFollowUpList = [];
       currentFollowUpIndex = 0;
 
-      document.getElementById("currentStudentBadge").textContent = `${name} 학생`;
+      const studentBadgeEl = document.getElementById("currentStudentBadge");
+      if (studentBadgeEl) studentBadgeEl.textContent = `${name} 학생`;
       document.getElementById("studentSelectDropdown").value = name;
 
       updateCategoryDropdown();
@@ -1260,12 +1261,35 @@
       currentFollowUpList = [];
       currentFollowUpIndex = 0;
 
-      const studentBadgeEl = document.getElementById("currentStudentBadge");
-      if (studentBadgeEl) studentBadgeEl.textContent = `${name} 학생`;
-      document.getElementById("studentSelectDropdown").value = name;
+      if (filteredCoreQuestions.length > 1) {
+        if (currentCoreIndex < filteredCoreQuestions.length - 1) {
+          currentCoreIndex++;
+        } else {
+          currentCoreIndex = 0;
+        }
+      }
 
-      updateCategoryDropdown();
-// ... existing code ... -->
+      resetInterview();
+      updateCurrentQuestionDisplay();
+    }
+
+    function getActiveQuestionObj() {
+      const coreQ = filteredCoreQuestions[currentCoreIndex];
+      if (!coreQ) return null;
+      if (isFollowUpMode && currentFollowUpList[currentFollowUpIndex]) {
+        return {
+          ...currentFollowUpList[currentFollowUpIndex],
+          isFollowUp: true,
+          parentCore: coreQ
+        };
+      }
+      return {
+        ...coreQ,
+        isFollowUp: false,
+        parentCore: null
+      };
+    }
+
     function updateCurrentQuestionDisplay() {
       const activeQ = getActiveQuestionObj();
       const parentBar = document.getElementById("parentCoreQuestionBar");
