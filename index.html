@@ -128,10 +128,10 @@
           <div>
             <div class="flex items-center gap-2">
               <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                제작자: 우신고 교사 이상준
+                제작: 우신고 교사 이상준
               </span>
             </div>
-            <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-1">우신고등학교 대학면접 AI 시뮬레이터</h2>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-1">우신고 대학면접 연습 Site</h2>
             <p class="text-xs sm:text-sm text-slate-400 mt-0.5">면접을 진행할 본인의 이름을 선택하면 핵심 질문 및 연계 꼬리질문이 준비됩니다.</p>
           </div>
         </div>
@@ -209,9 +209,9 @@
         </div>
         <div>
           <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-            <span>우신고등학교 대학면접 AI</span>
+            <span>우신고 대학면접 연습 Site</span>
             <span class="hidden md:inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              제작자: 우신고 교사 이상준
+              제작: 우신고 교사 이상준
             </span>
           </h1>
         </div>
@@ -256,26 +256,7 @@
     <section id="tabSection-interview" class="space-y-6">
       <!-- 상단 학생 정보 & 현재 질문 카드 -->
       <div id="questionCardContainer" class="bg-gradient-to-r from-slate-900 via-emerald-950/40 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden transition-all">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <span id="currentStudentBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500 text-slate-950 shadow">
-              김우현 학생
-            </span>
-            <!-- 핵심 질문 vs 꼬리질문 구분 배지 -->
-            <span id="questionTypeBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              핵심 질문
-            </span>
-            <span id="questionCounterBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700">
-              핵심 1 / 110
-            </span>
-            <span id="questionCategoryBadge" class="px-3 py-1 rounded-full text-xs font-medium bg-slate-800/90 text-slate-300">
-              자율활동
-            </span>
-            <span id="linkedFollowUpCountBadge" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 hidden">
-              연계 꼬리질문 3개
-            </span>
-          </div>
-
+        <div class="flex flex-wrap items-center justify-end gap-3 mb-3">
           <!-- 핵심 질문 필터 & 이동 컨트롤 -->
           <div class="flex flex-wrap items-center gap-2">
             <select id="categoryFilterSelect" onchange="handleCategoryFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 max-w-[200px] sm:max-w-[260px]">
@@ -1277,51 +1258,14 @@
       currentFollowUpList = [];
       currentFollowUpIndex = 0;
 
-      if (filteredCoreQuestions.length <= 1) {
-        resetInterview();
-        return;
-      }
+      const studentBadgeEl = document.getElementById("currentStudentBadge");
+      if (studentBadgeEl) studentBadgeEl.textContent = `${name} 학생`;
+      document.getElementById("studentSelectDropdown").value = name;
 
-      // 랜덤 5개 세트 모드이거나 순차 진행 중이면 다음 번호로 이동 (마지막이면 첫 번째로 순환)
-      if (isRandomFiveMode) {
-        currentCoreIndex = (currentCoreIndex + 1) % filteredCoreQuestions.length;
-      } else if (currentCategoryFilter !== "ALL") {
-        currentCoreIndex = (currentCoreIndex + 1) % filteredCoreQuestions.length;
-      } else {
-        // 전체 모드에서는 겹치지 않는 다른 핵심 질문을 무작위 추천
-        let nextIdx = Math.floor(Math.random() * filteredCoreQuestions.length);
-        if (nextIdx === currentCoreIndex) {
-          nextIdx = (currentCoreIndex + 1) % filteredCoreQuestions.length;
-        }
-        currentCoreIndex = nextIdx;
-      }
-
-      resetInterview();
-      updateCurrentQuestionDisplay();
-    }
-
-    function getActiveQuestionObj() {
-      const coreQ = filteredCoreQuestions[currentCoreIndex];
-      if (!coreQ) return null;
-      if (isFollowUpMode && currentFollowUpList[currentFollowUpIndex]) {
-        return {
-          ...currentFollowUpList[currentFollowUpIndex],
-          isFollowUp: true,
-          parentCore: coreQ
-        };
-      }
-      return {
-        ...coreQ,
-        isFollowUp: false
-      };
-    }
-
+      updateCategoryDropdown();
+// ... existing code ... -->
     function updateCurrentQuestionDisplay() {
       const activeQ = getActiveQuestionObj();
-      const typeBadge = document.getElementById("questionTypeBadge");
-      const counterBadge = document.getElementById("questionCounterBadge");
-      const catBadge = document.getElementById("questionCategoryBadge");
-      const linkedBadge = document.getElementById("linkedFollowUpCountBadge");
       const parentBar = document.getElementById("parentCoreQuestionBar");
       const parentText = document.getElementById("parentCoreQuestionText");
       const qTextEl = document.getElementById("questionTextDisplay");
@@ -1335,36 +1279,13 @@
       }
 
       if (activeQ.isFollowUp) {
-        typeBadge.textContent = `연계 꼬리질문 (${currentFollowUpIndex + 1}/${currentFollowUpList.length})`;
-        typeBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
-        counterBadge.textContent = `핵심 ${currentCoreIndex + 1}번 연계`;
-        linkedBadge.classList.add("hidden");
         parentBar.classList.remove("hidden");
         parentBar.classList.add("flex");
         parentText.textContent = activeQ.parentCore?.text || "";
       } else {
-        typeBadge.textContent = isRandomFiveMode
-          ? (currentCoreIndex === 0 ? "랜덤 5세트 · 필수 지원동기" : "랜덤 5세트 · 핵심 질문")
-          : "핵심 질문";
-        typeBadge.className = isRandomFiveMode && currentCoreIndex === 0
-          ? "px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30"
-          : "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-        counterBadge.textContent = isRandomFiveMode
-          ? `5문항 세트 (${currentCoreIndex + 1} / ${filteredCoreQuestions.length})`
-          : `핵심 ${currentCoreIndex + 1} / ${filteredCoreQuestions.length}`;
         parentBar.classList.add("hidden");
         parentBar.classList.remove("flex");
-
-        const fCount = activeQ.followUps?.length || 0;
-        if (fCount > 0) {
-          linkedBadge.textContent = `연계 꼬리질문 ${fCount}개`;
-          linkedBadge.classList.remove("hidden");
-        } else {
-          linkedBadge.classList.add("hidden");
-        }
       }
-
-      catBadge.textContent = activeQ.category;
 
       // 면접 시작 전('idle' 또는 'pre-countdown')에는 질문 블라인드 유지, 낭독 시작부터 공개
       const isRevealed = interviewStatus === "reading-question" ||
