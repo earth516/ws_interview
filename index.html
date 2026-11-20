@@ -277,14 +277,14 @@
           </div>
 
           <!-- 핵심 질문 필터 & 이동 컨트롤 -->
-          <div class="flex flex-wrap items-center gap-2">
-            <select id="categoryFilterSelect" onchange="handleCategoryFilter(this.value)" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500">
-              <option value="ALL">전체 핵심 질문 보기</option>
-            </select>
-
-            <button onclick="pickRandomQuestion()" id="randomQBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition" title="핵심 질문 무작위 추출">
+            <button onclick="pickRandomQuestion()" id="randomQBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition" title="핵심 질문 1개 무작위 추출">
               <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
-              <span>랜덤 핵심질문</span>
+              <span>랜덤 1개</span>
+            </button>
+
+            <button onclick="startRandomFiveSet()" id="randomFiveQBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-200 text-xs font-bold flex items-center gap-1 border border-emerald-500/40 transition shadow-sm" title="1번 지원동기 필수 + 무작위 4개 = 총 5문항 실전 세트 구성">
+              <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>랜덤 5개 질문 (지원동기 필수)</span>
             </button>
 
             <button onclick="prevQuestion()" id="prevQBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 transition" title="이전 핵심 질문">
@@ -456,20 +456,10 @@
                 <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                 <span>다시 도전</span>
               </button>
-            </div>
 
-            <!-- 핵심 질문 답변 완료 후 나타나는 [연결된 꼬리질문 이어서 하기] 패널 -->
-            <div id="followUpActionPanel" class="mt-4 pt-4 border-t border-slate-800 hidden space-y-2.5">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                  <i data-lucide="corner-down-right" class="w-4 h-4"></i>
-                  <span id="followUpPanelTitle">이 핵심 질문과 연결된 꼬리질문</span>
-                </span>
-                <span id="followUpStepIndicator" class="text-[11px] text-slate-400"></span>
-              </div>
-              <button id="nextFollowUpBtn" onclick="startNextLinkedFollowUp()" class="w-full py-3 px-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition shadow">
-                <i data-lucide="message-square-plus" class="w-4 h-4 text-amber-400"></i>
-                <span id="nextFollowUpBtnText">연결된 꼬리질문 시작하기 (1/3)</span>
+              <button id="anotherQuestionBtn" onclick="moveToAnotherQuestion()" class="py-3.5 px-4 rounded-xl bg-teal-600/25 hover:bg-teal-600/40 text-teal-200 font-bold text-sm hidden items-center justify-center gap-1.5 border border-teal-500/40 transition">
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                <span>다른 질문</span>
               </button>
             </div>
 
@@ -603,8 +593,10 @@
 
     // 우신고등학교 28명 학생 명단 (가나다순 정렬)
     const WOOSHIN_STUDENT_NAMES = [
-      "송현준", "심우진", "김도운",
-      "이지용", "정윤성"
+      "김경원", "김나을", "김도운", "김도율", "김민철", "김우현", "김지안",
+      "김하랑", "김희태", "박준서", "소하람", "송현준", "신승환", "심우진",
+      "안이환", "양민건", "이종혁", "이지용", "이지호", "장부태", "장서진",
+      "장예준", "정세영", "정시후", "정원준", "정윤성", "정한길"
     ].sort((a, b) => a.localeCompare(b, "ko-KR"));
 
     // 학생별 데이터 구조:
@@ -617,6 +609,7 @@
     // --- 전역 상태 변수 ---
     let currentStudentName = "김경원";
     let currentCategoryFilter = "ALL";
+    let isRandomFiveMode = false;
     let filteredCoreQuestions = []; // 오직 핵심 질문들만 담김 (처음부터 꼬리질문이 나오지 않음)
     let currentCoreIndex = 0;
 
@@ -1178,6 +1171,7 @@
       if (!studentQuestionDB[name]) return;
       currentStudentName = name;
       currentCategoryFilter = "ALL";
+      isRandomFiveMode = false;
       filteredCoreQuestions = [...studentQuestionDB[name].coreQuestions];
       currentCoreIndex = 0;
       isFollowUpMode = false;
@@ -1199,12 +1193,18 @@
       const coreList = studentQuestionDB[currentStudentName]?.coreQuestions || [];
       const categories = [...new Set(coreList.map(q => q.category))];
       selectEl.innerHTML = `<option value="ALL">전체 핵심 질문 (${coreList.length}문항)</option>` +
+        (isRandomFiveMode ? `<option value="RANDOM_5">🎯 랜덤 5개 실전 세트 (지원동기 필수)</option>` : "") +
         categories.map(cat => `<option value="${cat}">${cat}</option>`).join("");
-      selectEl.value = currentCategoryFilter;
+      selectEl.value = isRandomFiveMode ? "RANDOM_5" : currentCategoryFilter;
     }
 
     function handleCategoryFilter(cat) {
       if (interviewStatus !== "idle") return;
+      if (cat === "RANDOM_5") {
+        startRandomFiveSet();
+        return;
+      }
+      isRandomFiveMode = false;
       currentCategoryFilter = cat;
       const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
       filteredCoreQuestions = cat === "ALL"
@@ -1214,6 +1214,68 @@
       isFollowUpMode = false;
       currentFollowUpList = [];
       currentFollowUpIndex = 0;
+      resetInterview();
+      updateCurrentQuestionDisplay();
+    }
+
+    // 1번 지원동기 필수 + 무작위 4개 = 총 5개 실전 면접 세트 구성
+    function startRandomFiveSet() {
+      if (interviewStatus !== "idle" && interviewStatus !== "completed") return;
+      const allCore = studentQuestionDB[currentStudentName]?.coreQuestions || [];
+      if (allCore.length === 0) return;
+
+      // 1순위: '공통 1' 또는 '지원한 동기' / '지원동기'가 포함된 첫 번째 질문 추출
+      let motivationQ = allCore.find(q => q.code === "공통 1" || q.text.includes("지원한 동기") || q.text.includes("지원동기"));
+      if (!motivationQ) {
+        motivationQ = allCore[0];
+      }
+
+      // 나머지 질문들 중 4개 무작위 추출 (Fisher-Yates 셔플)
+      const remaining = allCore.filter(q => q.id !== motivationQ.id);
+      for (let i = remaining.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+      }
+      const pickedFour = remaining.slice(0, 4);
+
+      isRandomFiveMode = true;
+      currentCategoryFilter = "RANDOM_5";
+      filteredCoreQuestions = [motivationQ, ...pickedFour];
+      currentCoreIndex = 0;
+      isFollowUpMode = false;
+      currentFollowUpList = [];
+      currentFollowUpIndex = 0;
+
+      updateCategoryDropdown();
+      resetInterview();
+      updateCurrentQuestionDisplay();
+    }
+
+    // 답변 완료 후 [다른 질문] 버튼 클릭 시 바로 다음 핵심 질문으로 이동
+    function moveToAnotherQuestion() {
+      isFollowUpMode = false;
+      currentFollowUpList = [];
+      currentFollowUpIndex = 0;
+
+      if (filteredCoreQuestions.length <= 1) {
+        resetInterview();
+        return;
+      }
+
+      // 랜덤 5개 세트 모드이거나 순차 진행 중이면 다음 번호로 이동 (마지막이면 첫 번째로 순환)
+      if (isRandomFiveMode) {
+        currentCoreIndex = (currentCoreIndex + 1) % filteredCoreQuestions.length;
+      } else if (currentCategoryFilter !== "ALL") {
+        currentCoreIndex = (currentCoreIndex + 1) % filteredCoreQuestions.length;
+      } else {
+        // 전체 모드에서는 겹치지 않는 다른 핵심 질문을 무작위 추천
+        let nextIdx = Math.floor(Math.random() * filteredCoreQuestions.length);
+        if (nextIdx === currentCoreIndex) {
+          nextIdx = (currentCoreIndex + 1) % filteredCoreQuestions.length;
+        }
+        currentCoreIndex = nextIdx;
+      }
+
       resetInterview();
       updateCurrentQuestionDisplay();
     }
@@ -1261,9 +1323,15 @@
         parentBar.classList.add("flex");
         parentText.textContent = activeQ.parentCore?.text || "";
       } else {
-        typeBadge.textContent = "핵심 질문";
-        typeBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-        counterBadge.textContent = `핵심 ${currentCoreIndex + 1} / ${filteredCoreQuestions.length}`;
+        typeBadge.textContent = isRandomFiveMode
+          ? (currentCoreIndex === 0 ? "랜덤 5세트 · 필수 지원동기" : "랜덤 5세트 · 핵심 질문")
+          : "핵심 질문";
+        typeBadge.className = isRandomFiveMode && currentCoreIndex === 0
+          ? "px-3 py-1 rounded-full text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30"
+          : "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        counterBadge.textContent = isRandomFiveMode
+          ? `5문항 세트 (${currentCoreIndex + 1} / ${filteredCoreQuestions.length})`
+          : `핵심 ${currentCoreIndex + 1} / ${filteredCoreQuestions.length}`;
         parentBar.classList.add("hidden");
         parentBar.classList.remove("flex");
 
@@ -2029,6 +2097,7 @@
       const stopBtn = document.getElementById("stopInterviewBtn");
       const analyzeBtn = document.getElementById("analyzeBtn");
       const resetBtn = document.getElementById("resetInterviewBtn");
+      const anotherQBtn = document.getElementById("anotherQuestionBtn");
       const timeSelector = document.getElementById("timeLimitSelector");
 
       const idleBadge = document.getElementById("statusIdleBadge");
@@ -2047,6 +2116,10 @@
         analyzeBtn.classList.remove("flex");
         resetBtn.classList.add("hidden");
         resetBtn.classList.remove("flex");
+        if (anotherQBtn) {
+          anotherQBtn.classList.add("hidden");
+          anotherQBtn.classList.remove("flex");
+        }
         timeSelector.classList.remove("hidden");
 
         idleBadge.classList.remove("hidden");
@@ -2061,6 +2134,10 @@
         stopBtn.classList.add("flex");
         analyzeBtn.classList.add("hidden");
         resetBtn.classList.add("hidden");
+        if (anotherQBtn) {
+          anotherQBtn.classList.add("hidden");
+          anotherQBtn.classList.remove("flex");
+        }
         timeSelector.classList.add("hidden");
 
         idleBadge.classList.add("hidden");
@@ -2076,6 +2153,10 @@
         analyzeBtn.classList.add("flex");
         resetBtn.classList.remove("hidden");
         resetBtn.classList.add("flex");
+        if (anotherQBtn) {
+          anotherQBtn.classList.remove("hidden");
+          anotherQBtn.classList.add("flex");
+        }
         timeSelector.classList.add("hidden");
 
         idleBadge.classList.add("hidden");
